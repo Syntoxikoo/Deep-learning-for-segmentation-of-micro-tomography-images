@@ -1,0 +1,58 @@
+__pycache__/
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+.installed.cfg
+MANIFEST
+
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Type checkers / linters caches
+.mypy_cache/
+.pyre/
+.dmypy.json
+.ruff_cache/
+
+# Python tooling
+.poetry-cache/
+.pdm-python/
+__pypackages__/
+
+# Virtual environments
+.env
+.env.*
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+dev_specific
+# Logs
+*.log
+
+
+.github
+.github/
