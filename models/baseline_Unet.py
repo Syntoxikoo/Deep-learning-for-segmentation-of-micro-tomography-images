@@ -193,6 +193,7 @@ class U_net(nn.Module):
                     **kwargs,
                 )
             )
+        self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, filter_size))
 
     def forward(self, x):
         residuals: list = []
@@ -207,7 +208,7 @@ class U_net(nn.Module):
         # Decode with concat
         for ii in range(self.N_layers):
             x = self.decode[ii](x, residuals[ii])
-
+        x = self.segment_conv(x)
         return x
 
 
