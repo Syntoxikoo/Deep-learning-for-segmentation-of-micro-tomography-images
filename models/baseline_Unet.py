@@ -23,7 +23,7 @@ class Convblock(nn.Module):
         in_channels: int,
         out_channels: int,
         filter_size: int = 3,
-        dropout_rate: float = 0.5,
+        dropout_rate: float = 0.0,
         **kwargs,
     ):
         super().__init__()
@@ -31,6 +31,7 @@ class Convblock(nn.Module):
         self._stride: int = kwargs.get("stride", 1)
         self._padding: int = kwargs.get("padding", 0)
         self._dilation: int = kwargs.get("dilation", 1)
+        normalize: bool = kwargs.get("normalize", False)
         self.p1 = PrintSize()
         self.p2 = PrintSize()
         self.p3 = PrintSize()
@@ -43,7 +44,10 @@ class Convblock(nn.Module):
             padding=self._padding,
             dilation=self._dilation,
         )
-        self.bNorm1 = nn.BatchNorm2d(out_channels)
+        if normalize:
+            self.bNorm1 = nn.BatchNorm2d(out_channels)
+        else:
+            self.bNorm1 = nn.Identity()
         self.conv2 = nn.Conv2d(
             out_channels,
             out_channels,
@@ -52,7 +56,10 @@ class Convblock(nn.Module):
             padding=self._padding,
             dilation=self._dilation,
         )
-        self.bNorm2 = nn.BatchNorm2d(out_channels)
+        if normalize:
+            self.bNorm2 = nn.BatchNorm2d(out_channels)
+        else:
+            self.bNorm2 = nn.Identity()
         self.dropout = nn.Dropout2d(dropout_rate)
         self.activation = nn.ReLU(True)
 
@@ -84,11 +91,12 @@ class EncodeBlock(nn.Module):
         self.conv_block = Convblock(in_channels, out_channels, *args, **kwargs)
         self.pool = nn.MaxPool2d(pool_size, pool_size)
         self.resample = None
+        normalize: bool = kwargs.get("normalize", False)
 
         if residual_channels != out_channels:
             self.resample = nn.Sequential(
                 nn.Conv2d(out_channels, residual_channels, 1),
-                nn.BatchNorm2d(residual_channels),
+                nn.BatchNorm2d(residual_channels) if normalize else nn.Identity(),
             )
 
     def forward(self, x):
@@ -112,10 +120,17 @@ class DecodeBlock(nn.Module):
         **kwargs,
     ):
         super().__init__()
+        self.residual_meth = kwargs.get("residual", "interpolate")
+        upsampling = kwargs.get("upsampling", "nearest")
+
         self.conv_block = Convblock(in_channels, out_channels, *args, **kwargs)
-        self.up = nn.Upsample(
-            scale_factor=up_size, mode="bilinear", align_corners=False
-        )
+
+        if upsampling == "Ctranspose":
+            self.up = nn.ConvTranspose2d(
+                in_channels, in_channels, up_size, stride=up_size
+            )
+        else:
+            self.up = nn.Upsample(scale_factor=up_size, mode=upsampling)
         self.p1 = PrintSize()
         self.p2 = PrintSize()
         self.p3 = PrintSize()
@@ -136,9 +151,22 @@ class DecodeBlock(nn.Module):
 
         self.p2(upsampled)
         if residual is not None:
-            residual = F.interpolate(
-                residual, upsampled.shape[2], mode="bilinear", align_corners=False
-            )
+            if self.residual_meth.lower() == "interpolate":
+                residual = F.interpolate(
+                    residual, upsampled.shape[2], mode="bilinear", align_corners=False
+                )
+            else:
+                if residual.shape[2:] != upsampled.shape[2:]:
+                    diff_h = residual.shape[2] - upsampled.shape[2]
+                    diff_w = residual.shape[3] - upsampled.shape[3]
+                    crop_h = diff_h // 2
+                    crop_w = diff_w // 2
+                    residual = residual[
+                        :,
+                        :,
+                        crop_h : crop_h + upsampled.shape[2],
+                        crop_w : crop_w + upsampled.shape[3],
+                    ]
             concat = torch.cat((residual, upsampled), dim=1)
         else:
             concat = upsampled
@@ -158,10 +186,27 @@ class U_net(nn.Module):
         filter_size: int = 3,
         **kwargs,
     ) -> None:
+        """Own implementation of U-net, more or less close to the original paper
+
+        Args:
+            encode_in (tuple, optional): n_channels per layer of encoding (entry). Defaults to (1,).
+            encode_out (tuple, optional):n_channels per layer of encoding (out). Defaults to (64,).
+            decode_in (tuple, optional): n_channels per layer of decoding (entry). Defaults to (128,).
+            decode_out (tuple, optional): n_channels per layer of decoding (entry). Defaults to (64,).
+            filter_size (int, optional):  Defaults to 3.
+            kwargs:
+                - normalize (bool): perform normalization after each conv
+                - stride (int): ..
+                - padding (int): ..
+                - dilation (int): ..
+                - upsampling (str): "Ctranspose" or "bilinear"
+                - residual (str): "interpolate" or "crop"
+        """
         super().__init__()
         assert len(encode_in) == len(
             decode_in
         ), "U-net should have the same number of encode and decode layer"
+        normalize: bool = kwargs.get("normalize", False)
         self.N_layers = len(encode_in)
         self.encode = nn.ModuleList()
         for ii in range(self.N_layers):
@@ -178,9 +223,9 @@ class U_net(nn.Module):
         bottleneck_channels = kwargs.get("bottleneck_channels", last_encode * 2)
         self.bottleneck = nn.Sequential(
             nn.Conv2d(last_encode, bottleneck_channels, filter_size),
-            nn.BatchNorm2d(bottleneck_channels),
+            nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity(),
             nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size),
-            nn.BatchNorm2d(bottleneck_channels),
+            nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity(),
             nn.ReLU(True),
         )
         self.decode = nn.ModuleList()
@@ -193,7 +238,7 @@ class U_net(nn.Module):
                     **kwargs,
                 )
             )
-        self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, filter_size))
+        self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
 
     def forward(self, x):
         residuals: list = []
