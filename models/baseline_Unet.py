@@ -153,7 +153,7 @@ class DecodeBlock(nn.Module):
         if residual is not None:
             if self.residual_meth.lower() == "interpolate":
                 residual = F.interpolate(
-                    residual, upsampled.shape[2], mode="bilinear", align_corners=False
+                    residual, upsampled.shape[2:], mode="bilinear", align_corners=False
                 )
             else:
                 if residual.shape[2:] != upsampled.shape[2:]:
