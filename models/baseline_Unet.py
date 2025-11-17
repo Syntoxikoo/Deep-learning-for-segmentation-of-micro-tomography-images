@@ -224,6 +224,7 @@ class U_net(nn.Module):
         self.bottleneck = nn.Sequential(
             nn.Conv2d(last_encode, bottleneck_channels, filter_size),
             nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity(),
+            nn.ReLU(True),
             nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size),
             nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity(),
             nn.ReLU(True),
