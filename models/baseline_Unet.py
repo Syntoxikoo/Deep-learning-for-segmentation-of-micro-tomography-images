@@ -214,7 +214,7 @@ class U_net(nn.Module):
                 EncodeBlock(
                     in_channels=encode_in[ii],
                     out_channels=encode_out[ii],
-                    residual_channels=int(decode_in[ii] / 2),
+                    residual_channels=int(decode_in[self.N_layers - 1 - ii] / 2),
                     filter_size=filter_size,
                     **kwargs,
                 )
@@ -251,6 +251,7 @@ class U_net(nn.Module):
         x = self.bottleneck(x)
 
         # Decode with concat
+        residuals = residuals[::-1]
         for ii in range(self.N_layers):
             x = self.decode[ii](x, residuals[ii])
         x = self.segment_conv(x)
