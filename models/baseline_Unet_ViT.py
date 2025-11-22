@@ -228,11 +228,17 @@ class ViTBottleneck(nn.Module):       # wrapper around PyTorch's nn.TransformerE
         return x_out
 
 
-class BottleneckViT(nn.Module): #same outer interface, keeps two Conv+BN+ReLU layers but adds a transformer after them
+class BottleneckViT(nn.Module):
     """
-    Replacement for the original simplet Unet convolutional bottleneck. 
-    It keeps the same outer interface but internally it does:
-        Conv → BN/ReLU → Conv → BN/ReLU → ViT bottleneck
+    Replacement for the original convolutional bottleneck.
+
+    Includes ADAPTIVE downsampling before the ViT:
+        - Repeatedly downsample until H*W <= max_tokens
+        - Conv → BN/ReLU → Conv → BN/ReLU
+        - Transformer (ViTBottleneck)
+        - Upsample back to original bottleneck resolution
+
+    This keeps memory under control even for large inputs like 1270x1350.
     """
 
     def __init__(
@@ -245,15 +251,20 @@ class BottleneckViT(nn.Module): #same outer interface, keeps two Conv+BN+ReLU la
         vit_mlp_dim: int = None,
         vit_dropout: float = 0.1,
         filter_size: int = 3,
+        max_tokens: int = 2048,  # <--- safe upper bound for H*W seen by ViT
     ):
         super().__init__()
 
+        self.max_tokens = max_tokens
+
+        # Conv part (similar to original bottleneck)
         self.conv1 = nn.Conv2d(in_channels, bottleneck_channels, filter_size)
         self.bn1 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
         self.conv2 = nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size)
         self.bn2 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
         self.act = nn.ReLU(True)
 
+        # ViT bottleneck
         self.vit = ViTBottleneck(
             channels=bottleneck_channels,
             num_layers=vit_num_layers,
@@ -263,15 +274,40 @@ class BottleneckViT(nn.Module): #same outer interface, keeps two Conv+BN+ReLU la
         )
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.act(x)
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.act(x)
-        x = self.vit(x)
-        return x
+        # Remember original spatial size at the bottleneck
+        b, c, h0, w0 = x.shape
 
+        # 1) Adaptively downsample until token count is safe
+        x_down = x
+        down_factor = 1
+        while (
+            x_down.shape[2] * x_down.shape[3] > self.max_tokens
+            and x_down.shape[2] >= 4
+            and x_down.shape[3] >= 4
+        ):
+            x_down = F.max_pool2d(x_down, kernel_size=2, stride=2)
+            down_factor *= 2
+
+        # 2) Conv block at reduced resolution
+        x_down = self.conv1(x_down)
+        x_down = self.bn1(x_down)
+        x_down = self.act(x_down)
+        x_down = self.conv2(x_down)
+        x_down = self.bn2(x_down)
+        x_down = self.act(x_down)
+
+        # 3) Transformer on reduced-resolution feature map
+        x_down = self.vit(x_down)
+
+        # 4) Upsample back to the original bottleneck spatial size
+        x_up = F.interpolate(
+            x_down,
+            size=(h0, w0),  # explicitly restore original H,W
+            mode="bilinear",
+            align_corners=False,
+        )
+
+        return x_up
 
 class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dropout, are new variables, 
                             # default to small values so behavior matches simple Unet when ViT is shallow
@@ -352,7 +388,8 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
                     **kwargs,
                 )
             )
-        self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
+        #self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
+        self.segment_conv = nn.Conv2d(decode_out[-1], 1, kernel_size=1)    #change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
 
     def forward(self, x):
         residuals: list = []
