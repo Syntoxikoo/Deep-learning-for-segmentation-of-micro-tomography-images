@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime
 import torch
 import os
@@ -14,7 +15,7 @@ from torch import nn
 from ..utils import (
     get_device,
     PairTransform,
-    UnetDataset,
+    TOMODataset,
     init_weights,
     WeightedCrossEntropyLossV2,
     setup_logger,
@@ -22,13 +23,14 @@ from ..utils import (
 from ..models import UNet
 
 
-def main(on_cluster=True):
+def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4):
     # Setup directories
-    save_dir = "checkpoints"
+    path = Path(__file__).resolve().parents[2]
+    timestamp = datetime.now().strftime("%d-%Hh%M")
+    save_dir = os.path.join(path, "checkpoints", f"run_{timestamp}")
     os.makedirs(save_dir, exist_ok=True)
     logger = setup_logger(save_dir)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_path = os.path.join(save_dir, f"metrics_run_{timestamp}.csv")
+    csv_path = os.path.join(save_dir, "metrics.csv")
     csv_file = open(csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(
@@ -36,45 +38,49 @@ def main(on_cluster=True):
     )
 
     device, dl_workers = get_device()
-
-    # Constants
-    BATCH_SIZE = 10
-    NUM_EPOCH = 10
-    LEARNING_RATE = 1e-4
-    pad_image = None
-
     # Transforms
     transform = v2.Compose(
         [
             v2.RandomRotation([-20, 20]),
-            v2.RandomVerticalFlip(),
-            v2.RandomHorizontalFlip(),
-            v2.ElasticTransform(interpolation=v2.InterpolationMode.NEAREST),
+            v2.RandomVerticalFlip(p=0.5),
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomAffine(
+                degrees=180,
+                translate=(0.1, 0.1),
+                scale=(0.8, 1.2),
+                interpolation=v2.InterpolationMode.BILINEAR,
+            ),
+            v2.ElasticTransform(
+                alpha=50,
+                sigma=5,
+            ),
+            v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
+            v2.ColorJitter(brightness=0.2, contrast=0.2),
         ]
     )
     pair_transform = PairTransform(transform)
 
     # Load data
-    cwd = Path.cwd().parent
-    path = os.path.join(cwd, "datas/Unet")
+    img_dir = os.path.join(path, "datas/Original Images")
+    label_dir = os.path.join(path, "datas/Original Masks")
 
-    train_dataset = UnetDataset(
-        path, split="train", transform=pair_transform, padding=pad_image
+    train_dataset = TOMODataset(
+        img_dir, label_dir=label_dir, split="train", transform=pair_transform
     )
-    test_dataset = UnetDataset(
-        path, split="test", transform=pair_transform, padding=pad_image
+    test_dataset = TOMODataset(
+        label_dir, label_dir=label_dir, split="test", transform=pair_transform
     )
 
     train_loader = DataLoader(
         train_dataset,
-        BATCH_SIZE,
+        batch_size,
         True,
         num_workers=dl_workers,
         pin_memory=True if on_cluster else False,
     )
     test_loader = DataLoader(
         test_dataset,
-        BATCH_SIZE,
+        batch_size,
         True,
         num_workers=dl_workers,
         pin_memory=True if on_cluster else False,
@@ -92,7 +98,7 @@ def main(on_cluster=True):
 
     # Training Params
     loss_fn = WeightedCrossEntropyLossV2()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     if on_cluster:
@@ -100,7 +106,7 @@ def main(on_cluster=True):
 
     best_test_loss = float("inf")
     # Training
-    for epoch in range(NUM_EPOCH):
+    for epoch in range(epochs):
 
         # Training Step
         model.train()
@@ -168,7 +174,7 @@ def main(on_cluster=True):
         avg_test_loss = np.mean(test_loss_list)
         avg_dice = np.mean(dice_scores)
 
-        logger.info(f"=== Epoch {epoch+1}/{NUM_EPOCH} Result ===")
+        logger.info(f"=== Epoch {epoch+1}/{epochs} Result ===")
         logger.info(f"Train Loss: {avg_train_loss:.4f}")
         logger.info(f"Test Loss:  {avg_test_loss:.4f}")
         logger.info(f"Dice Score: {avg_dice:.4f}")
@@ -187,12 +193,18 @@ def main(on_cluster=True):
         show_prediction(images, labels, out, save_dir, epoch)
 
         # Save Last
-        torch.save(model.state_dict(), os.path.join(save_dir, "last_model.pth"))
+        torch.save(
+            model.state_dict(),
+            os.path.join(save_dir, "last_model.pth"),
+        )
 
         # Save Best
         if avg_test_loss < best_test_loss:
             best_test_loss = avg_test_loss
-            torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pth"))
+            torch.save(
+                model.state_dict(),
+                os.path.join(save_dir, "best_model.pth"),
+            )
             logger.info(f"New best model saved (Loss: {best_test_loss:.4f})")
 
     csv_file.close()
@@ -215,5 +227,36 @@ def show_prediction(images, labels, out, dir, epoch=0) -> None:
     plt.savefig(os.path.join(dir, f"prediction_epoch_{epoch}.png"))
 
 
+def _arg_parse():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--on_cluster",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=False,
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=10,
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10,
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-4,
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    main(False)
+    args = _arg_parse()
+    main(
+        on_cluster=args.on_cluster,
+        batch_size=args.batch_size,
+        epochs=args.epochs,
+        learning_rate=args.learning_rate,
+    )
