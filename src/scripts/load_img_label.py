@@ -46,5 +46,5 @@ for batch_idx, (images, labels, weights) in enumerate(train_dataloader):
         axes[2, i].set_title(f"weight {i+1}")
         axes[2, i].axis("off")
     plt.tight_layout()
-    plt.savefig(f"train_batch_{batch_idx}.png")
+    plt.savefig(f"src/scripts/train_batch_{batch_idx}.png")
     plt.close()
