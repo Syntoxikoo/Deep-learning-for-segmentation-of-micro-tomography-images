@@ -18,13 +18,15 @@ from ..utils import (
     TOMODataset,
     init_weights,
     WeightedCrossEntropyLossV2,
+    WeightedCrossEntropyLoss,
     setup_logger,
 )
 from ..models import UNet
 
 
-def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4):
+def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir = None):
     # Setup directories
+     
     path = Path(__file__).resolve().parents[2]
     timestamp = datetime.now().strftime("%d-%Hh%M")
     save_dir = os.path.join(path, "checkpoints", f"run_{timestamp}")
@@ -61,14 +63,18 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4):
     pair_transform = PairTransform(transform)
 
     # Load data
-    img_dir = os.path.join(path, "datas/Original Images")
-    label_dir = os.path.join(path, "datas/Original Masks")
+    if data_dir:
+        data_path = data_dir
+    else:
+        data_path = os.path.join(path,"datas")
+    img_dir = os.path.join(data_path, "Original Images")
+    label_dir = os.path.join(data_path, "Original Masks")
 
     train_dataset = TOMODataset(
         img_dir, label_dir=label_dir, split="train", transform=pair_transform
     )
     test_dataset = TOMODataset(
-        label_dir, label_dir=label_dir, split="test", transform=pair_transform
+        img_dir, label_dir=label_dir, split="test"
     )
 
     train_loader = DataLoader(
@@ -91,14 +97,14 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4):
         num_classes=2,
         features=(64, 128, 256, 512),
         bilinear=False,
-        normalize=True,
+        normalize=True,drop_out = 0.3
     )
     model.apply(init_weights)
     model.to(device)
 
     # Training Params
     loss_fn = WeightedCrossEntropyLossV2()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     if on_cluster:
@@ -120,12 +126,12 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4):
             optimizer.zero_grad()
 
             if on_cluster:
-                with autocast():
+                with autocast(device_type= "cuda"):
                     out = model(images)
                     loss = loss_fn(out, labels, weights)
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
                 scaler.step(optimizer)
                 scaler.update()
@@ -249,8 +255,8 @@ def _arg_parse():
         type=float,
         default=1e-4,
     )
+    parser.add_argument("--data_dir", type = str, default = None)
     return parser.parse_args()
-
 
 if __name__ == "__main__":
     args = _arg_parse()
@@ -259,4 +265,5 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         epochs=args.epochs,
         learning_rate=args.learning_rate,
+        data_dir = args.data_dir
     )
