@@ -1,3 +1,11 @@
+#%%
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# Add src/ to PYTHONPATH
+sys.path.append(str(REPO_ROOT / "src"))
+
 import argparse
 from datetime import datetime
 import torch
@@ -12,7 +20,7 @@ from torch import optim
 import matplotlib.pyplot as plt
 from torch.amp import GradScaler, autocast
 from torch import nn
-from ..utils import (
+from utils import (
     get_device,
     PairTransform,
     TOMODataset,
@@ -21,7 +29,7 @@ from ..utils import (
     WeightedCrossEntropyLoss,
     setup_logger,
 )
-from ..models import UNet
+from models import UNet
 
 
 def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir = None):
@@ -243,7 +251,7 @@ def _arg_parse():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=10,
+        default=1,
     )
     parser.add_argument(
         "--epochs",
@@ -256,7 +264,9 @@ def _arg_parse():
         default=1e-4,
     )
     parser.add_argument("--data_dir", type = str, default = None)
-    return parser.parse_args()
+    # return parser.parse_args()
+    return parser.parse_known_args()[0]       #change needed to run as jupyter
+
 
 if __name__ == "__main__":
     args = _arg_parse()
