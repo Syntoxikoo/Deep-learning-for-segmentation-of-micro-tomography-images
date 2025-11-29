@@ -167,7 +167,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 
 
 best_dice = 0.0
-patience = 10
+patience = 20
 wait = 0
 train_losses = []
 val_losses = []
