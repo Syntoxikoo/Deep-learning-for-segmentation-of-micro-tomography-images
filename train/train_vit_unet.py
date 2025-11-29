@@ -23,9 +23,9 @@ from models.baseline_Unet_ViT import U_net_ViT
 
 # Argument parsing
 parser = argparse.ArgumentParser(description="Train a U-Net ViT model for segmentation.")
-parser.add_argument("--img_data_path", type=str, default="../datas/Original Images",
+parser.add_argument("--img_data_path", type=str, default="../datas/original/train/imgs",
                     help="Path to the directory containing original images.")
-parser.add_argument("--mask_data_path", type=str, default="../datas/Original Masks",
+parser.add_argument("--mask_data_path", type=str, default="../datas/original/train/labels",
                     help="Path to the directory containing mask images.")
 parser.add_argument("--epochs", type=int, default=20,
                     help="Number of training epochs.")
@@ -126,7 +126,7 @@ train_transform = T.Compose([
     T.RandomVerticalFlip(),
     T.RandomRotation(degrees=5, expand=True, fill=0),
     T.RandomResizedCrop((768, 768), scale=(0.9, 1.0)),
-    AddGaussianNoise(sigma=0.02)
+    AddGaussianNoise(sigma=0.01)
 ])
 
 # Dataset and split
