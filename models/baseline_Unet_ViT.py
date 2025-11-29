@@ -25,7 +25,7 @@ class Convblock(nn.Module):
         in_channels: int,
         out_channels: int,
         filter_size: int = 3,
-        dropout_rate: float = 0.0,
+        dropout_rate: float = 0.2,
         **kwargs,
     ):
         super().__init__()
@@ -261,7 +261,7 @@ class BottleneckViT(nn.Module):
         vit_num_layers: int = 2,
         vit_num_heads: int = 4,
         vit_mlp_dim: int = None,
-        vit_dropout: float = 0.1,
+        vit_dropout: float = 0.2,
         filter_size: int = 3,
         max_tokens: int = 2048,  # <--- safe upper bound for H*W seen by ViT
     ):
@@ -339,7 +339,7 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
         vit_num_layers: int = 2,
         vit_num_heads: int = 4,
         vit_mlp_dim: int = None,
-        vit_dropout: float = 0.1,
+        vit_dropout: float = 0.2,
         **kwargs,
     ) -> None:
         """U-net with Transformer bottleneck, closely following baseline_Unet.py.
