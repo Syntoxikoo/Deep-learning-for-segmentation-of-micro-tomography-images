@@ -109,11 +109,11 @@ class EncodeBlock(nn.Module):
             residual = self.resample(out)
         else:
             residual = out.clone()
-        print("[DEBUG] Encode block:",
-            "min =", pooled.min().item(),
-            "max =", pooled.max().item(),
-            "mean =", pooled.mean().item(),
-            "shape =", tuple(pooled.shape))
+        # print("[DEBUG] Encode block:",
+        #     "min =", pooled.min().item(),
+        #     "max =", pooled.max().item(),
+        #     "mean =", pooled.mean().item(),
+        #     "shape =", tuple(pooled.shape))
 
         return pooled, residual
 
@@ -181,11 +181,11 @@ class DecodeBlock(nn.Module):
         self.p3(concat)
         out = self.conv_block(concat)
 
-        print("[DEBUG] Decode block:",
-            "min =", out.min().item(),
-            "max =", out.max().item(),
-            "mean =", out.mean().item(),
-            "shape =", tuple(out.shape))
+        # print("[DEBUG] Decode block:",
+        #     "min =", out.min().item(),
+        #     "max =", out.max().item(),
+        #     "mean =", out.mean().item(),
+        #     "shape =", tuple(out.shape))
 
         return out
 
@@ -319,11 +319,11 @@ class BottleneckViT(nn.Module):
             align_corners=False,
         )
 
-        print("[DEBUG] Bottleneck output:",
-            "min =", x_up.min().item(),
-            "max =", x_up.max().item(),
-            "mean =", x_up.mean().item(),
-            "shape =", tuple(x_up.shape))
+        # print("[DEBUG] Bottleneck output:",
+        #     "min =", x_up.min().item(),
+        #     "max =", x_up.max().item(),
+        #     "mean =", x_up.mean().item(),
+        #     "shape =", tuple(x_up.shape))
 
         return x_up
 
@@ -419,11 +419,11 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
 
         # Bottleneck (conv + Transformer)
         x = self.bottleneck(x)
-        print("[DEBUG] After bottleneck:",
-            "min =", x.min().item(),
-            "max =", x.max().item(),
-            "mean =", x.mean().item(),
-            "shape =", tuple(x.shape))
+        # print("[DEBUG] After bottleneck:",
+        #     "min =", x.min().item(),
+        #     "max =", x.max().item(),
+        #     "mean =", x.mean().item(),
+        #     "shape =", tuple(x.shape))
 
         # Decode with concat
         residuals = residuals[::-1]
@@ -432,11 +432,11 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
         x = self.segment_conv(x)
 
         # === DEBUG: Final logits stats ===
-        print("\n[DEBUG] Final logits:",
-            "min =", x.min().item(),
-            "max =", x.max().item(),
-            "mean =", x.mean().item(),
-            "shape =", tuple(x.shape))
+        # print("\n[DEBUG] Final logits:",
+        #     "min =", x.min().item(),
+        #     "max =", x.max().item(),
+        #     "mean =", x.mean().item(),
+        #     "shape =", tuple(x.shape))
 
         return x
 

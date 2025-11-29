@@ -104,6 +104,15 @@ class DiceLoss(nn.Module):
         union = pred.sum() + target.sum()
         return 1 - (2 * intersection + smooth) / (union + smooth)
 
+class AddGaussianNoise(object):
+    def __init__(self, sigma=0.02):
+        self.sigma = sigma
+
+    def __call__(self, tensor):
+        noise = torch.randn(tensor.size()) * self.sigma
+        return tensor + noise
+
+
 # Configuration
 img_dir = args.img_data_path
 mask_dir = args.mask_data_path
@@ -115,19 +124,19 @@ learning_rate = args.lr
 train_transform = T.Compose([
     T.RandomHorizontalFlip(),
     T.RandomVerticalFlip(),
-    T.RandomRotation(
-        degrees=5,
-        expand=True,
-        fill=0
-    ),
-    T.RandomResizedCrop((768, 768), scale=(0.9, 1.0))
+    T.RandomRotation(degrees=5, expand=True, fill=0),
+    T.RandomResizedCrop((768, 768), scale=(0.9, 1.0)),
+    AddGaussianNoise(sigma=0.02)
 ])
 
-# Dataset and DataLoader
+# Dataset and split
 dataset = MicroCTDataset(img_dir, mask_dir, transform=train_transform)
 train_size = int(0.8 * len(dataset))
 val_size = len(dataset) - train_size
 train_ds, val_ds = random_split(dataset, [train_size, val_size])
+
+# Disable augmentation on validation set
+val_ds.dataset.transform = None
 
 train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_ds, batch_size=1, shuffle=False)
@@ -151,7 +160,18 @@ model = U_net_ViT(
 criterion = lambda pred, target: (
     nn.BCEWithLogitsLoss()(pred, target) + DiceLoss()(pred, target)
 )
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, mode="max", factor=0.5, patience=5
+)
+
+
+best_dice = 0.0
+patience = 10
+wait = 0
+train_losses = []
+val_losses = []
+dice_scores = []
 
 # Training loop
 for epoch in range(num_epochs):
@@ -199,16 +219,56 @@ for epoch in range(num_epochs):
             val_dice_scores.append(dice_score.item())
 
     avg_train_loss = train_loss / len(train_loader)
+    train_losses.append(avg_train_loss)
     avg_val_loss = val_loss / len(val_loader)
+    val_losses.append(avg_val_loss)
     avg_val_dice = np.mean(val_dice_scores)
+    dice_scores.append(avg_val_dice)
+
+
+    # Early stopping
+    if avg_val_dice > best_dice:
+        best_dice = avg_val_dice
+        wait = 0
+    else:
+        wait += 1
+        if wait >= patience:
+            print(f"Early stopping at epoch {epoch+1}")
+            break
+
+    scheduler.step(avg_val_dice)
+
 
     print(f"Epoch {epoch+1}/{num_epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Dice: {avg_val_dice:.4f}")
+
+# Final average Dice score over all validation images 
+final_avg_dice = np.mean(val_dice_scores) 
+print(f"Final Average Dice Score over Validation Images: {final_avg_dice:.4f}")
 
 # Save model
 model_save_path = os.path.join(args.save_dir, "unet_vit_trained.pth")
 os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
 torch.save(model.state_dict(), model_save_path)
 print(f"Model saved to {model_save_path} ✔")
+
+# save loss plots
+plt.figure()
+plt.plot(train_losses, label="Train Loss")
+plt.plot(val_losses, label="Val Loss")
+plt.title("Loss Curves")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.savefig(os.path.join(args.save_dir, "training_curves.png"))
+plt.close()
+
+plt.figure() 
+plt.plot(dice_scores) 
+plt.title("Validation Dice Score") 
+plt.xlabel("Epoch") 
+plt.ylabel("Dice") 
+plt.savefig(os.path.join(args.save_dir, "dice_curves.png")) 
+plt.close()
 
 # Save an example prediction image
 save_dir = os.path.join(args.save_dir, "predictions") # Subdirectory for predictions
