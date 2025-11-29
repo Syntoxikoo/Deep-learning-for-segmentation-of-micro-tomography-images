@@ -43,7 +43,7 @@ IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tom
 MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
 SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
 
-EPOCHS=50
+EPOCHS=100
 LR=1e-4
 BATCH_SIZE=1  # can reduce to 2 or 1 if OOM persists
 
