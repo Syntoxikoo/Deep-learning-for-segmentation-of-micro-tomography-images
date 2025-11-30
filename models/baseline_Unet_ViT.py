@@ -19,6 +19,64 @@ class PrintSize(nn.Module):
         return x
 
 
+# class Convblock(nn.Module):
+#     def __init__(
+#         self,
+#         in_channels: int,
+#         out_channels: int,
+#         filter_size: int = 3,
+#         dropout_rate: float = 0.2,
+#         **kwargs,
+#     ):
+#         super().__init__()
+
+#         self._stride: int = kwargs.get("stride", 1)
+#         self._padding: int = kwargs.get("padding", 0)
+#         self._dilation: int = kwargs.get("dilation", 1)
+#         normalize: bool = kwargs.get("normalize", False)
+#         self.p1 = PrintSize()
+#         self.p2 = PrintSize()
+#         self.p3 = PrintSize()
+
+#         self.conv1 = nn.Conv2d(
+#             in_channels,
+#             out_channels,
+#             filter_size,
+#             stride=self._stride,
+#             padding=self._padding,
+#             dilation=self._dilation,
+#         )
+#         if normalize:
+#             self.bNorm1 = nn.BatchNorm2d(out_channels)
+#         else:
+#             self.bNorm1 = nn.Identity()
+#         self.conv2 = nn.Conv2d(
+#             out_channels,
+#             out_channels,
+#             filter_size,
+#             stride=self._stride,
+#             padding=self._padding,
+#             dilation=self._dilation,
+#         )
+#         if normalize:
+#             self.bNorm2 = nn.BatchNorm2d(out_channels)
+#         else:
+#             self.bNorm2 = nn.Identity()
+#         self.dropout = nn.Dropout2d(dropout_rate)
+#         self.activation = nn.ReLU(True)
+
+#     def forward(self, x):
+#         self.p1(x)
+#         out = self.conv1(x)
+#         self.p2(out)
+#         out = self.bNorm1(out)
+#         out = self.activation(out)
+#         out = self.conv2(out)
+#         self.p3(out)
+#         out = self.bNorm2(out)
+#         out = self.activation(out)
+#         out = self.dropout(out)
+#         return out
 class Convblock(nn.Module):
     def __init__(
         self,
@@ -30,53 +88,74 @@ class Convblock(nn.Module):
     ):
         super().__init__()
 
-        self._stride: int = kwargs.get("stride", 1)
-        self._padding: int = kwargs.get("padding", 0)
-        self._dilation: int = kwargs.get("dilation", 1)
+        stride: int = kwargs.get("stride", 1)
+        dilation: int = kwargs.get("dilation", 1)
         normalize: bool = kwargs.get("normalize", False)
-        self.p1 = PrintSize()
-        self.p2 = PrintSize()
-        self.p3 = PrintSize()
+
+        # ✅ FIX 1: Preserve resolution with padding=1 for 3×3 kernels
+        padding = 1 if filter_size == 3 else 0
 
         self.conv1 = nn.Conv2d(
-            in_channels,
-            out_channels,
-            filter_size,
-            stride=self._stride,
-            padding=self._padding,
-            dilation=self._dilation,
+            in_channels, out_channels, filter_size,
+            stride=stride, padding=padding, dilation=dilation
         )
-        if normalize:
-            self.bNorm1 = nn.BatchNorm2d(out_channels)
-        else:
-            self.bNorm1 = nn.Identity()
+        self.bNorm1 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
         self.conv2 = nn.Conv2d(
-            out_channels,
-            out_channels,
-            filter_size,
-            stride=self._stride,
-            padding=self._padding,
-            dilation=self._dilation,
+            out_channels, out_channels, filter_size,
+            stride=stride, padding=padding, dilation=dilation
         )
-        if normalize:
-            self.bNorm2 = nn.BatchNorm2d(out_channels)
-        else:
-            self.bNorm2 = nn.Identity()
+        self.bNorm2 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
+
         self.dropout = nn.Dropout2d(dropout_rate)
         self.activation = nn.ReLU(True)
 
     def forward(self, x):
-        self.p1(x)
         out = self.conv1(x)
-        self.p2(out)
         out = self.bNorm1(out)
         out = self.activation(out)
         out = self.conv2(out)
-        self.p3(out)
         out = self.bNorm2(out)
         out = self.activation(out)
         out = self.dropout(out)
         return out
+
+
+class EncodeBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, residual_channels, pool_size=2, **kwargs):
+        super().__init__()
+        self.conv_block = Convblock(in_channels, out_channels, **kwargs)
+
+        # ✅ FIX 2: Only one downsample per encoder block
+        self.pool = nn.MaxPool2d(pool_size, stride=pool_size)
+
+    def forward(self, x):
+        out = self.conv_block(x)
+        pooled = self.pool(out)
+        return pooled, out.clone()
+
+
+class DecodeBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, up_size=2, **kwargs):
+        super().__init__()
+
+        upsampling = kwargs.get("upsampling", "bilinear")
+
+        # ✅ FIX 3: Upsample bilinear instead of nearest
+        if upsampling == "Ctranspose":
+            self.up = nn.ConvTranspose2d(in_channels, in_channels, up_size, stride=up_size)
+        else:
+            self.up = nn.Upsample(scale_factor=up_size, mode="bilinear", align_corners=False)
+
+        self.conv_block = Convblock(in_channels//2 + in_channels, out_channels, **kwargs)
+
+    def forward(self, x, residual):
+        x = self.up(x)
+
+        # ✅ FIX 4: interpolate residual to match decoder spatial size
+        residual = F.interpolate(residual, size=x.shape[2:], mode="bilinear", align_corners=False)
+
+        x = torch.cat([residual, x], dim=1)
+        return self.conv_block(x)
 
 
 class EncodeBlock(nn.Module):
@@ -408,7 +487,14 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
             )
         #self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
         self.segment_conv = nn.Conv2d(decode_out[-1], 1, kernel_size=1)    #change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
-
+        
+        self.deep_heads = nn.ModuleList([
+            nn.Conv2d(512, 1, 1),
+            nn.Conv2d(256, 1, 1),
+            nn.Conv2d(128, 1, 1),
+            nn.Conv2d(64, 1, 1),
+        ])
+    
     def forward(self, x):
         residuals: list = []
 
@@ -427,9 +513,20 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
 
         # Decode with concat
         residuals = residuals[::-1]
+        deep_preds = []
+
         for ii in range(self.N_layers):
             x = self.decode[ii](x, residuals[ii])
-        x = self.segment_conv(x)
+
+            # grab deep supervision predictions
+            if ii < len(self.deep_heads):
+                dp = self.deep_heads[ii](x)
+                dp = F.interpolate(dp, size=x.shape[2:], mode="bilinear", align_corners=False)
+                deep_preds.append(dp)
+
+        # Final prediction
+        final_pred = self.segment_conv(x)
+        return final_pred, deep_preds
 
         # === DEBUG: Final logits stats ===
         # print("\n[DEBUG] Final logits:",
