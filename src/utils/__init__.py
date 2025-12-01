@@ -1,5 +1,6 @@
 from .custom_loss import DiceLoss, WeightedCrossEntropyLoss, WeightedCrossEntropyLossV2
 from .dataset_loader import TOMODataset, UnetDataset
+from .plot_func import plot_data_transform, plot_losses_curves, plot_prediction
 from .tools import (
     PairTransform,
     get_device,
@@ -15,6 +16,9 @@ __all__ = [
     "WeightedCrossEntropyLossV2",
     "UnetDataset",
     "TOMODataset",
+    "plot_losses_curves",
+    "plot_prediction",
+    "plot_data_transform",
     "PairTransform",
     "get_device",
     "init_weights",
