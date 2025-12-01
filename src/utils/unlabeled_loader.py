@@ -7,13 +7,12 @@ import tifffile
 
 class UnlabeledTomoDataset(Dataset):
     """
-    Dataset loader for unlabeled tomography images.
-    Mirrors TOMODataset style but without labels.
+    Loads unlabeled tomography images (.tif) and resizes them to a fixed size
+    compatible with the U-Net training (default: 512x512).
     """
 
-    def __init__(self, img_dir, transform=None, resized_shape=None):
+    def __init__(self, img_dir, resized_shape=(512, 512)):
         self.img_dir = img_dir
-        self.transform = transform
         self.resized_shape = resized_shape
         self.imgs_names = sorted(os.listdir(img_dir))
 
@@ -26,23 +25,22 @@ class UnlabeledTomoDataset(Dataset):
 
         img = tifffile.imread(path).astype(np.float32)
 
-        # Same normalization used in TOMODataset
+        # Percentile clipping (same as supervised loader)
         p1 = np.percentile(img, 1)
         p99 = np.percentile(img, 99)
         img = np.clip(img, p1, p99)
         img = (img - p1) / (p99 - p1 + 1e-8)
 
+        # To tensor
         img = torch.tensor(img).float().unsqueeze(0)
 
-        if self.resized_shape:
+        # Resize to match supervised dataset
+        if self.resized_shape is not None:
             img = torch.nn.functional.interpolate(
                 img.unsqueeze(0),
                 size=self.resized_shape,
                 mode="bilinear",
                 align_corners=False,
             ).squeeze(0)
-
-        if self.transform:
-            img = self.transform(img)
 
         return img, name
