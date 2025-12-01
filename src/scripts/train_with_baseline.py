@@ -17,10 +17,11 @@ from ..utils import (
     DiceLoss,
     PairTransform,
     TOMODataset,
-    WeightedCrossEntropyLoss,
     WeightedCrossEntropyLossV2,
     get_device,
     init_weights,
+    plot_losses_curves,
+    plot_prediction,
     setup_logger,
 )
 
@@ -205,8 +206,9 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 scheduler.get_last_lr()[0],
             ]
         )
-        show_prediction(images, labels, out, save_dir, epoch)
+        pred = torch.argmax(out, dim=1)[0]
 
+        plot_prediction(images[0], labels[0], pred, save_dir, epoch + 1, show=False)
         # Save Last
         torch.save(
             model.state_dict(),
@@ -222,28 +224,8 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
             )
             logger.info(f"New best model saved (Loss: {best_test_loss:.4f})")
 
+    plot_losses_curves(avg_train_loss, avg_test_loss, save_dir, show=False)
     csv_file.close()
-
-
-def show_prediction(images, labels, out, dir, epoch=0) -> None:
-    images = images.cpu()
-    labels = labels.cpu()
-    preds = torch.argmax(out, dim=1).cpu()
-
-    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-
-    axs[0].imshow(images[0, 0], cmap="gray")
-    axs[0].set_title("Input Image")
-
-    axs[1].imshow(labels[0].numpy(), cmap="gray", vmin=0, vmax=1)
-    axs[1].set_title("Ground Truth")
-
-    axs[2].imshow(preds[0].numpy(), cmap="gray", vmin=0, vmax=1)
-    axs[2].set_title("Prediction")
-    for ax in axs:
-        ax.axis("off")
-    plt.savefig(os.path.join(dir, f"prediction_epoch_{epoch}.png"))
-    plt.close()
 
 
 def _arg_parse():

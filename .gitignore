@@ -58,3 +58,4 @@ dev_specific
 .github
 .github/
 checkpoints/
+logs/
