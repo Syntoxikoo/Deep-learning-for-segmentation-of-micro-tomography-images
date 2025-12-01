@@ -1,2 +1,0 @@
-2025-12-01 13:18:20 - [Epoch 1][Step 0] Loss: 5.6796 | Class 0 Prob: 0.71
-2025-12-01 13:18:48 - [Epoch 1][Step 10] Loss: 3.7775 | Class 0 Prob: 0.70
