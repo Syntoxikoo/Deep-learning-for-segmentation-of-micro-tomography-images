@@ -7,8 +7,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch import nn, optim
-from torch.amp import GradScaler, autocast
+from torch import optim
+from torch.amp.autocast_mode import autocast
+from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
@@ -17,7 +18,6 @@ from ..utils import (
     DiceLoss,
     PairTransform,
     TOMODataset,
-    WeightedCrossEntropyLoss,
     WeightedCrossEntropyLossV2,
     get_device,
     init_weights,
@@ -48,7 +48,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
             v2.RandomVerticalFlip(p=0.5),
             v2.RandomHorizontalFlip(p=0.5),
             v2.RandomAffine(
-                degrees=180,
+                degrees=[-180, 180],
                 translate=(0.1, 0.1),
                 scale=(0.8, 1.2),
                 interpolation=v2.InterpolationMode.BILINEAR,
