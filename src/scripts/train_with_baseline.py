@@ -133,7 +133,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                     out = model(images)
                     ce_loss = ce_loss_fn(out, labels, weights)
                     dice_loss = dice_loss_fn(out, labels)
-                    loss = dice_loss + ce_loss
+                    loss = dice_loss
 
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
@@ -146,7 +146,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
-                loss = dice_loss + ce_loss
+                loss = dice_loss
                 loss.backward()
                 optimizer.step()
 
@@ -174,7 +174,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
-                loss = dice_loss + ce_loss
+                loss = dice_loss
                 test_loss_list.append(loss.item())
 
                 prediction = torch.argmax(out, dim=1)
