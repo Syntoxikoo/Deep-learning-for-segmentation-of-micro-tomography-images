@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -289,6 +289,7 @@ dependencies = [
 [package.optional-dependencies]
 local = [
     { name = "black" },
+    { name = "ffmpeg" },
     { name = "glfw" },
     { name = "jupyter-rfb" },
     { name = "matplotlib-inline" },
@@ -302,6 +303,7 @@ local = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'local'", specifier = ">=25.11.0" },
+    { name = "ffmpeg", marker = "extra == 'local'", specifier = ">=1.4" },
     { name = "glfw", marker = "extra == 'local'", specifier = ">=2.10.0" },
     { name = "jupyter-rfb", marker = "extra == 'local'", specifier = ">=0.5.4" },
     { name = "matplotlib", specifier = ">=3.10.7" },
@@ -331,6 +333,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/cc/28/c14e053b6762b1044
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl", hash = "sha256:760643d3452b4d777d295bb167ccc74c64a81df23fb5e08eff250c425a4b2017", size = 28317, upload-time = "2025-09-01T09:48:08.5Z" },
 ]
+
+[[package]]
+name = "ffmpeg"
+version = "1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f0/cc/3b7408b8ecf7c1d20ad480c3eaed7619857bf1054b690226e906fdf14258/ffmpeg-1.4.tar.gz", hash = "sha256:6931692c890ff21d39938433c2189747815dca0c60ddc7f9bb97f199dba0b5b9", size = 5055, upload-time = "2018-10-08T07:50:05.748Z" }
 
 [[package]]
 name = "filelock"
