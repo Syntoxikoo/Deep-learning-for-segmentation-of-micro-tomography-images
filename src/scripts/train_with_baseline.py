@@ -98,6 +98,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
         bilinear=False,
         normalize=True,
         drop_out=0.3,
+        batch_size=batch_size,
     )
     model.apply(init_weights)
     model.to(device)
