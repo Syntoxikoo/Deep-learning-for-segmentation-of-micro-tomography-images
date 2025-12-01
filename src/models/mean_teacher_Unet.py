@@ -11,8 +11,16 @@ class MeanTeacherUNet(nn.Module):
         - teacher: updated via EMA only
     """
 
-    def __init__(self, in_channels=1, num_classes=2, features=(64,128,256,512),
-                 bilinear=False, normalize=True, drop_out=0.3, ema_alpha=0.99):
+    def __init__(
+        self,
+        in_channels=1,
+        num_classes=2,
+        features=(64, 128, 256, 512),
+        bilinear=False,
+        normalize=True,
+        drop_out=0.3,
+        ema_alpha=0.99,
+    ):
         super().__init__()
 
         self.ema_alpha = ema_alpha
@@ -27,7 +35,7 @@ class MeanTeacherUNet(nn.Module):
             drop_out=drop_out,
         )
 
-        # Teacher network (copy of student, not trained)
+        # Teacher network (copy of student, not trained directly)
         self.teacher = copy.deepcopy(self.student)
         for p in self.teacher.parameters():
             p.requires_grad = False
@@ -45,13 +53,39 @@ class MeanTeacherUNet(nn.Module):
 
 class ConsistencyLoss(nn.Module):
     """
-    MSE loss on probabilities, consistent with your WeightedCrossEntropy style.
+    Consistency loss with:
+      - softmax on logits,
+      - temperature-based sharpening of teacher probabilities,
+      - confidence mask: we only enforce consistency where teacher is confident.
+
+    Change: try to prevent the teacher from pulling the student
+    towards low-confidence or noisy predictions everywhere.
     """
-    def __init__(self):
+
+    def __init__(self, temperature: float = 0.5, conf_thresh: float = 0.6):
         super().__init__()
-        self.mse = nn.MSELoss()
+        self.temperature = temperature
+        self.conf_thresh = conf_thresh
+        self.mse = nn.MSELoss(reduction="none")
 
     def forward(self, student_logits, teacher_logits):
+        # Student probabilities (no sharpening)
         s = torch.softmax(student_logits, dim=1)
-        t = torch.softmax(teacher_logits, dim=1)
-        return self.mse(s, t)
+
+        # Teacher probabilities, sharpened with temperature < 1
+        with torch.no_grad():
+            t = torch.softmax(teacher_logits / self.temperature, dim=1)
+            # Confidence = max class prob
+            conf, _ = t.max(dim=1, keepdim=True)  # [B,1,H,W]
+            mask = (conf >= self.conf_thresh).float()
+
+        # Per-pixel MSE between prob vectors
+        # shape: [B, C, H, W] -> average over channel dim
+        loss_map = self.mse(s, t).mean(dim=1, keepdim=True)  # [B,1,H,W]
+
+        # If no confident pixels at all, fall back to unmasked mean
+        if mask.sum() == 0:
+            return loss_map.mean()
+
+        loss = (loss_map * mask).sum() / mask.sum()
+        return loss
