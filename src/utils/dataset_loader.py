@@ -172,17 +172,21 @@ class TOMODataset(Dataset):
         c0_count = total_pixels - c1_count
 
         w_c = np.zeros_like(mask, dtype=np.float32)
-        w_c[mask == 0] = total_pixels / (2 * c0_count)
-        w_c[mask == 1] = total_pixels / (2 * c1_count)
+        w_c[mask == 0] = total_pixels / (2 * c0_count) if c0_count != 0 else 0
+        w_c[mask == 1] = total_pixels / (2 * c1_count) if c1_count != 0 else 0
 
-        # Distance from background pixels to nearest foreground object
-        dist1 = distance_transform_edt(mask == 0)
-        # Distance from background pixels to nearest foreground object
-        dist2 = distance_transform_edt(mask == 1)
+        w_c = np.clip(w_c, 0.1, 50.0)
+        if c1_count > 0 and c0_count > 0:
+            # Distance from background pixels to nearest foreground object
+            dist1 = distance_transform_edt(mask == 0)
+            # Distance from background pixels to nearest foreground object
+            dist2 = distance_transform_edt(mask == 1)
 
-        dist = dist1 + dist2
-        gaussian_w = w0 * np.exp((-(dist**2)) / (2 * sigma**2))
-        weight_map = w_c + gaussian_w
+            dist = dist1 + dist2
+            gaussian_w = w0 * np.exp((-(dist**2)) / (2 * sigma**2))
+            weight_map = w_c + gaussian_w
+        else:
+            weight_map = w_c
         return torch.tensor(weight_map, dtype=torch.float32)
 
     def normalize(self, arr):
