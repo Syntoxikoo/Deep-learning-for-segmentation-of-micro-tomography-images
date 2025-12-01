@@ -56,7 +56,7 @@ python -m src.scripts.train_with_baseline \
     --on_cluster True \
     --epochs 30 \
     --learning_rate 1e-5 \
-    --batch_size 4
+    --batch_size 10
     # --data_dir "$LOCAL_DATA_DIR"
 
 EXIT_CODE=$?
