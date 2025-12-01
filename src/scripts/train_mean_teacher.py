@@ -29,6 +29,7 @@ from utils.unlabeled_loader import UnlabeledTomoDataset
 from models.mean_teacher_Unet import MeanTeacherUNet, ConsistencyLoss
 
 
+
 def main(
     on_cluster=True,
     batch_size=1,
@@ -38,6 +39,9 @@ def main(
     unlabeled_dir=None,
     ema_alpha=0.99,
     lambda_u=0.5,
+    student_ckpt=None,
+    teacher_ckpt=None,
+    checkpoint_both=None,
 ):
 
     # ========== Setup ==========
@@ -115,6 +119,20 @@ def main(
         num_classes=2,
         ema_alpha=ema_alpha,
     ).to(device)
+    # ----------------------------------------------------------
+    # OPTIONAL RESTORE CHECKPOINT(S)
+    # ----------------------------------------------------------
+    
+    if student_ckpt is not None:
+        model.load_student(student_ckpt, device=device)
+
+    if teacher_ckpt is not None:
+        model.load_teacher(teacher_ckpt, device=device)
+
+    if checkpoint_both is not None:
+        model.load_both(checkpoint_both, device=device)
+
+
 
     sup_loss_fn = WeightedCrossEntropyLossV2()
     cons_loss_fn = ConsistencyLoss(temperature=0.5, conf_thresh=0.6)
@@ -159,14 +177,23 @@ def main(
 
             # ----- SUPERVISED PASS -----
             stu_logits_l = model.student(imgs_l)
+            if isinstance(stu_logits_l, tuple):
+                stu_logits_l = stu_logits_l[0]
+
             loss_sup = sup_loss_fn(stu_logits_l, labels_l, weights_l)
             loss_sup.backward()
 
             # ----- UNSUPERVISED PASS -----
             with torch.no_grad():
                 tea_logits_u = model.teacher(imgs_u)
+                if isinstance(tea_logits_u, tuple):
+                    tea_logits_u = tea_logits_u[0]
+
 
             stu_logits_u = model.student(imgs_u)
+            if isinstance(stu_logits_l, tuple):
+                stu_logits_l = stu_logits_l[0]
+
             loss_cons = cons_loss_fn(stu_logits_u, tea_logits_u)
             loss_u = lambda_w * loss_cons
             loss_u.backward()
@@ -215,8 +242,16 @@ def main(
 
         if avg_val < best_val_loss:
             best_val_loss = avg_val
+
             torch.save(model.student.state_dict(), os.path.join(save_dir, "best_student.pth"))
             torch.save(model.teacher.state_dict(), os.path.join(save_dir, "best_teacher.pth"))
+
+            # NEW: combine both
+            torch.save({
+                "student": model.student.state_dict(),
+                "teacher": model.teacher.state_dict(),
+            }, os.path.join(save_dir, "best_mean_teacher.pth"))
+
 
     csv_file.close()
 
@@ -323,6 +358,11 @@ def _arg_parse():
     parser.add_argument("--unlabeled_dir", type=str, default=None)
     parser.add_argument("--ema_alpha", type=float, default=0.99)
     parser.add_argument("--lambda_u", type=float, default=0.5)
+    parser.add_argument("--student_ckpt", type=str, default=None)
+    parser.add_argument("--teacher_ckpt", type=str, default=None)
+    parser.add_argument("--checkpoint_both", type=str, default=None) 
+    # .pth file containing {"student":state_dict, "teacher":state_dict}
+
     return parser.parse_known_args()[0]
 
 
