@@ -5,7 +5,7 @@ import tifffile
 import torch
 from scipy.ndimage import distance_transform_edt
 from skimage.filters import threshold_otsu
-from skimage.morphology import binary_opening, disk
+from skimage.morphology import remove_small_objects
 from torch.utils.data import Dataset
 from torchvision import tv_tensors
 from torchvision.io import decode_png
@@ -121,7 +121,6 @@ class TOMODataset(Dataset):
         image, label = self.load_pair(sample_idx)
 
         image = self.normalize(image)
-        label = self.normalize(label)
 
         image = torch.from_numpy(image).float()
         label = torch.from_numpy(label).float()
@@ -142,13 +141,12 @@ class TOMODataset(Dataset):
                 label, self.resized_shape, v2.functional.InterpolationMode.NEAREST
             )
 
+        label = self.binarize_mask(label, 2)
         label = tv_tensors.Mask(label)
 
         if self.transform:
             image, label = self.transform(image, label)
 
-        label = self.binarize_mask(label, 1)
-        label = 1 - label
         weight_map = self.weights_masks(label.numpy())
         return image, label.squeeze(0).long(), weight_map
 
@@ -164,7 +162,7 @@ class TOMODataset(Dataset):
 
         return image, label
 
-    def weights_masks(self, mask, w0=10, sigma=5):
+    def weights_masks(self, mask, w0=5, sigma=2):
         """mitigate class imbalance for binary set"""
         mask = mask.squeeze(0)
         total_pixels = mask.size
@@ -174,32 +172,39 @@ class TOMODataset(Dataset):
         w_c = np.zeros_like(mask, dtype=np.float32)
         w_c[mask == 0] = total_pixels / (2 * c0_count) if c0_count != 0 else 0
         w_c[mask == 1] = total_pixels / (2 * c1_count) if c1_count != 0 else 0
+        w_c = np.clip(w_c, 0.1, 30.0)
 
-        w_c = np.clip(w_c, 0.1, 50.0)
         if c1_count > 0 and c0_count > 0:
             # Distance from background pixels to nearest foreground object
             dist1 = distance_transform_edt(mask == 0)
             # Distance from background pixels to nearest foreground object
             dist2 = distance_transform_edt(mask == 1)
-
             dist = dist1 + dist2
+
             gaussian_w = w0 * np.exp((-(dist**2)) / (2 * sigma**2))
             weight_map = w_c + gaussian_w
         else:
             weight_map = w_c
+
+        mean_weight = np.mean(weight_map)
+        if mean_weight > 0:
+            weight_map = weight_map / mean_weight
+
         return torch.tensor(weight_map, dtype=torch.float32)
 
-    def normalize(self, arr):
+    def normalize(self, arr, mode: str | None = None):
         """
         Centers the dynamic range on the actual material, discard artifacts.
         """
-        p_lower = np.percentile(arr, 1)
-        p_upper = np.percentile(arr, 99)
-
-        arr = np.clip(arr, p_lower, p_upper)
+        if mode is not None and mode == "full":
+            p_lower = arr.min()
+            p_upper = arr.max()
+        else:
+            p_lower = np.percentile(arr, 1)
+            p_upper = np.percentile(arr, 99)
+            arr = np.clip(arr, p_lower, p_upper)
 
         norm = (arr - p_lower) / (p_upper - p_lower + 1e-8)
-
         return norm.astype(np.float32)
 
     def binarize_mask(self, mask, radius):
@@ -209,10 +214,25 @@ class TOMODataset(Dataset):
             mask = mask
 
         mask = mask.squeeze()
+        threshold = threshold_otsu(mask)
+        binary_mask = mask < threshold
 
-        thresh = threshold_otsu(mask)
-        binary_mask = mask > thresh
-
-        cleaned_mask = binary_opening(binary_mask, footprint=disk(radius))
+        cleaned_mask = remove_small_objects(binary_mask, min_size=(8))
 
         return torch.tensor(cleaned_mask, dtype=torch.float32).unsqueeze(0)
+
+
+TRANSFORM: dict = {
+    "rotation": v2.RandomRotation([-20, 20]),
+    "V-flip": v2.RandomVerticalFlip(p=0.5),
+    "H-flip": v2.RandomHorizontalFlip(p=0.5),
+    "Affine": v2.RandomAffine(
+        degrees=[-180, 180],
+        translate=(0.1, 0.1),
+        scale=(0.8, 1.2),
+        interpolation=v2.InterpolationMode.BILINEAR,
+    ),
+    "Stretch": v2.ElasticTransform(),
+    "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
+    "Color-jitter": v2.ColorJitter(brightness=0.2, contrast=0.2),
+}
