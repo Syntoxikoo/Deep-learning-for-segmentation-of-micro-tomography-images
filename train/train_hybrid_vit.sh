@@ -88,7 +88,7 @@ EOF
 # Run training
 # ------------------------------
 echo "Executing Python training script..."
-python3 train/train_vit_unet.py \
+python3 train/train_old.py \
     --img_data_path "$IMG_DATA_PATH" \
     --mask_data_path "$MASK_DATA_PATH" \
     --epochs "$EPOCHS" \

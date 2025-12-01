@@ -9,11 +9,12 @@ import tifffile as tiff
 import torchvision.transforms as T
 from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image
+from dataset_loader import UnetDataset, TOMODataset
 
 torch.cuda.empty_cache()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../models")))
-from ..models.baseline_Unet_ViT import U_net_ViT
+from baseline_Unet_ViT import U_net_ViT
 
 parser = argparse.ArgumentParser(description="Train a U-Net ViT model for segmentation.")
 parser.add_argument("--img_data_path", type=str, default="../datas/original/train/imgs")
@@ -32,7 +33,7 @@ class MicroCTDataset(Dataset):
         self.img_files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith('.tif')])
         self.mask_files = [f.replace("image_v2_", "image_v2_mask_") for f in self.img_files]
 
-        self.preprocess = T.Resize((768,768), interpolation=T.InterpolationMode.BILINEAR)
+        self.preprocess = T.Resize((512,512), interpolation=T.InterpolationMode.BILINEAR)
 
     def __len__(self): return len(self.img_files)
 
@@ -93,32 +94,45 @@ val_loader=DataLoader(val_ds,batch_size=1,shuffle=False)
 print("Train samples:",len(train_ds),"| Val samples:",len(val_ds))
 
 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 model = U_net_ViT(
-    encode_in=(1,64,128,256), encode_out=(64,128,256,512),
-    decode_in=(1024,512,256,128), decode_out=(512,256,128,64),
-    normalize=True
+    in_channels=1,
+    num_classes=1,
+    features=(64, 128, 256, 512),
+    bilinear=False,
+    normalize=True,
+    filter_size=3,
+    dropout=0.2,
+    max_tokens=2048
 ).to(device)
 
 optimizer=torch.optim.Adam(model.parameters(),lr=args.lr, weight_decay=1e-5)
 scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max',factor=0.5,patience=5)
 loss_fn=lambda p,t: nn.BCEWithLogitsLoss()(p,t)+DiceLoss()(p,t)
 
-best_dice=0; stop_wait=15; history_losses=[]; history_val=[]; history_dice=[]; wait=0
+best_dice=0; stop_wait=25; history_losses=[]; history_val=[]; history_dice=[]; wait=0
 for epoch in range(args.epochs):
     model.train(); run=0
     for img,mask in train_loader:
         img,mask=img.to(device),mask.to(device)
-        optimizer.zero_grad(); p=model(img)
-        mask=mask[:,:,:p.shape[2],:p.shape[3]]  # safe crop
-        loss=loss_fn(p,mask); loss.backward(); optimizer.step()
+        optimizer.zero_grad()
+        logits, deep = model(img)
+        mask = mask[:, :, :logits.shape[2], :logits.shape[3]]  # crop
+        loss = loss_fn(logits, mask)
+
         run+=loss.item()
 
     model.eval(); vrun=0; dices=[]
     with torch.no_grad():
         for img,mask in val_loader:
-            img,mask=img.to(device),mask.to(device); p=model(img)
-            mask=mask[:,:,:p.shape[2],:p.shape[3]]
-            vrun+=loss_fn(p,mask).item(); dices.append(dice_metric(p,mask))
+            img,mask=img.to(device),mask.to(device)
+            logits, deep = model(img)
+
+            probs = torch.sigmoid(logits)
+            d = dice_metric(probs, mask)
+            vrun += loss.item()
+            dices.append(d)
+
     avg_loss=run/len(train_loader); history_losses.append(avg_loss)
     avg_val=vrun/len(val_loader); history_val.append(avg_val)
     avg_dice=np.mean(dices); history_dice.append(avg_dice)
@@ -143,7 +157,22 @@ mp=os.path.join(args.save_dir,"unet_vit_trained.pth"); os.makedirs(args.save_dir
 torch.save(model.state_dict(),mp); print("Model saved ✔",mp)
 
 # Save loss plot
-plt.figure(); plt.plot(history_losses,label='train'); plt.plot(history_val,label='val'); plt.legend(); plt.savefig(os.path.join(args.save_dir,"training_curves.png")); plt.close()
+epochs = range(1, len(history_losses) + 1)
+
+plt.figure(figsize=(8,5))
+plt.plot(epochs, history_losses, 'b-o', label='Train Loss')
+plt.plot(epochs, history_val, 'r-o', label='Val Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Training and Validation Loss vs Epochs')
+plt.legend()
+plt.grid(True)
+
+# Save figure
+os.makedirs(args.save_dir, exist_ok=True)
+plt.savefig(os.path.join(args.save_dir, "loss_vs_epochs.png"), dpi=200)
+plt.show()
+
 plt.figure(); plt.plot(history_dice,label='dice'); plt.legend(); plt.savefig(os.path.join(args.save_dir,"dice_curve.png")); plt.close()
 
 
@@ -152,16 +181,21 @@ plt.figure(); plt.plot(history_dice,label='dice'); plt.legend(); plt.savefig(os.
 # One eval example plot from validation
 img_e, mask_e = val_ds[0]                  # img_e, mask_e shapes: (1, H, W)
 bimg = img_e.unsqueeze(0).to(device)      # -> (1, 1, H, W)
-with torch.no_grad():
-    pm = torch.sigmoid(model(bimg)).cpu() # pm shape: (1, 1, Hp, Wp)  (maybe same H/W)
-
-# select the single image prediction (H, W)
-pm_vis = pm[0, 0]  # shape: (Hp, Wp) as a tensor
-
 # convert all to 2D numpy arrays for plotting
 img_vis = img_e.squeeze(0).cpu().numpy()   # now (H, W)
 mask_vis = mask_e.squeeze(0).cpu().numpy() # now (H, W)
-pm_vis_np = pm_vis.detach().cpu().numpy()  # (Hp, Wp)
+
+
+with torch.no_grad():
+    logits, _ = model(bimg)
+pm = torch.sigmoid(logits).cpu()
+
+pm_vis = pm[0, 0]
+pm_vis_np = pm_vis.numpy()
+dice_val = dice_metric(torch.from_numpy(pm_vis_np), torch.from_numpy(mask_vis))
+
+# select the single image prediction (H, W)
+
 
 # If prediction size differs from GT due to safe-crop, resize/clip or show the overlapping region.
 # Here we will crop/pad to the smallest common size to avoid shape mismatch:
@@ -170,6 +204,10 @@ w = min(img_vis.shape[1], pm_vis_np.shape[1], mask_vis.shape[1])
 img_vis = img_vis[:h, :w]
 mask_vis = mask_vis[:h, :w]
 pm_vis_np = pm_vis_np[:h, :w]
+
+threshold = 0.5
+pred_binary = (pm_vis_np > threshold).astype(np.float32)
+
 
 # compute dice on these CPU tensors (DiceMetric expects tensors)
 dice_val = dice_metric(torch.from_numpy(pm_vis_np), torch.from_numpy(mask_vis))
@@ -187,8 +225,8 @@ plt.title("mask")
 plt.axis('off')
 
 plt.subplot(1, 3, 3)
-plt.imshow(pm_vis_np, cmap='gray', vmin=0.0, vmax=1.0)
-plt.title(f"pred dice {dice_val:.4f}")
+plt.imshow(pred_binary, cmap='gray', vmin=0.0, vmax=1.0)
+plt.title(f"Binarized prediction @ thresh={threshold} dice {dice_val:.4f}")
 plt.axis('off')
 
 plt.tight_layout()

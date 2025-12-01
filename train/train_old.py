@@ -9,11 +9,13 @@ import tifffile as tiff
 import torchvision.transforms as T
 from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image
+from dataset_loader import UnetDataset, TOMODataset
+
 
 torch.cuda.empty_cache()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../models")))
-from baseline_Unet_ViT import U_net_ViT
+from baseline_Unet_ViT_old import U_net_ViT
 
 parser = argparse.ArgumentParser(description="Train a U-Net ViT model for segmentation.")
 parser.add_argument("--img_data_path", type=str, default="../datas/original/train/imgs")
@@ -75,20 +77,49 @@ metric=DiceMetric=DiceMetric()
 #     lambda x: x + torch.randn_like(x)*0.01
 # ])
 
-train_transform = T.Compose([
-    T.RandomHorizontalFlip(),
-    T.RandomVerticalFlip(),
-    T.RandomRotation(10, fill=0, expand=False),
-    T.RandomResizedCrop((768,768), scale=(0.85, 1.0)),
-    T.ColorJitter(brightness=0.15, contrast=0.15),
-])
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
+
+train_transform = A.Compose([
+    A.HorizontalFlip(p=0.5),
+    A.VerticalFlip(p=0.5),
+    A.Rotate(limit=10, border_mode=0, p=0.5),
+    A.RandomResizedCrop((768, 768), scale=(0.85, 1.0), p=1.0),
+    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+],
+    additional_targets={"mask": "mask"}
+)
 
 
-dataset=MicroCTDataset(args.img_data_path, args.mask_data_path, transform=train_transform)
-tbs=int(0.8*len(dataset)); vbs=len(dataset)-tbs
-train_ds,val_ds=random_split(dataset,[tbs,vbs]); val_ds.dataset.transform=None
-train_loader=DataLoader(train_ds,batch_size=args.batch_size,shuffle=True)
-val_loader=DataLoader(val_ds,batch_size=1,shuffle=False)
+from dataset_loader import TOMODataset
+from torch.utils.data import DataLoader
+
+# Load dataset using your custom loader
+train_ds = TOMODataset(
+    img_dir="datas/original/train/imgs",
+    label_dir="datas/original/train/labels",
+    split="train",
+    resized_shape=[768, 768],            # Matches model input
+    transform=train_transform
+)
+
+val_ds = TOMODataset(
+    img_dir="datas/original/train/imgs",
+    label_dir="datas/original/train/labels",
+    split="test",
+    resized_shape=[768, 768],
+    transform=None
+)
+
+train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
+val_loader   = DataLoader(val_ds, batch_size=1, shuffle=False)
+
+
+# dataset=MicroCTDataset(args.img_data_path, args.mask_data_path, transform=train_transform)
+# tbs=int(0.8*len(dataset)); vbs=len(dataset)-tbs
+# train_ds,val_ds=random_split(dataset,[tbs,vbs]); val_ds.dataset.transform=None
+# train_loader=DataLoader(train_ds,batch_size=args.batch_size,shuffle=True)
+# val_loader=DataLoader(val_ds,batch_size=1,shuffle=False)
 
 print("Train samples:",len(train_ds),"| Val samples:",len(val_ds))
 
@@ -99,44 +130,122 @@ model = U_net_ViT(
     normalize=True
 ).to(device)
 
+
 optimizer=torch.optim.Adam(model.parameters(),lr=args.lr, weight_decay=1e-5)
 scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max',factor=0.5,patience=5)
 loss_fn=lambda p,t: nn.BCEWithLogitsLoss()(p,t)+DiceLoss()(p,t)
 
-best_dice=0; stop_wait=15; history_losses=[]; history_val=[]; history_dice=[]; wait=0
-for epoch in range(args.epochs):
-    model.train(); run=0
-    for img,mask in train_loader:
-        img,mask=img.to(device),mask.to(device)
-        optimizer.zero_grad(); p=model(img)
-        mask=mask[:,:,:p.shape[2],:p.shape[3]]  # safe crop
-        loss=loss_fn(p,mask); loss.backward(); optimizer.step()
-        run+=loss.item()
+best_dice = 0
+stop_wait = 15
+history_losses = []
+history_val = []
+history_dice = []
+wait = 0
 
-    model.eval(); vrun=0; dices=[]
+for epoch in range(args.epochs):
+    model.train()
+    run = 0.0
+
+    for img, mask in train_loader:
+        img = img.to(device)
+        mask = mask.to(device)
+
+        optimizer.zero_grad()
+        p = model(img)
+        # unwrap if model returns (logits, aux)
+        if isinstance(p, tuple) or isinstance(p, list):
+            p = p[0]
+
+        # ensure predictions dtype float and mask dtype float
+        if not torch.is_floating_point(p):
+            p = p.float()
+        mask_f = mask.float()
+
+        # safe: if the prediction and mask spatial shapes mismatch, crop to smallest common region
+        # p: (B, C, Hp, Wp), mask_f: (B, C_mask, Hm, Wm) typically C=1
+        if p.dim() == 4 and mask_f.dim() == 4:
+            Hp, Wp = p.shape[2], p.shape[3]
+            Hm, Wm = mask_f.shape[2], mask_f.shape[3]
+            h = min(Hp, Hm); w = min(Wp, Wm)
+            if (h != Hm) or (w != Wm):
+                mask_f = mask_f[:, :, :h, :w]
+            if (h != Hp) or (w != Wp):
+                p = p[:, :, :h, :w]
+
+        loss = loss_fn(p, mask_f)
+        loss.backward()
+        optimizer.step()
+
+        run += loss.item()
+
+    # validation
+    model.eval()
+    vrun = 0.0
+    dices = []
     with torch.no_grad():
-        for img,mask in val_loader:
-            img,mask=img.to(device),mask.to(device); p=model(img)
-            mask=mask[:,:,:p.shape[2],:p.shape[3]]
-            vrun+=loss_fn(p,mask).item(); dices.append(dice_metric(p,mask))
-    avg_loss=run/len(train_loader); history_losses.append(avg_loss)
-    avg_val=vrun/len(val_loader); history_val.append(avg_val)
-    avg_dice=np.mean(dices); history_dice.append(avg_dice)
+        for img, mask in val_loader:
+            img = img.to(device)
+            mask = mask.to(device)
+
+            p = model(img)
+            if isinstance(p, tuple) or isinstance(p, list):
+                p = p[0]
+
+            # ensure p float, mask float
+            if not torch.is_floating_point(p):
+                p = p.float()
+            mask_f = mask.float()
+
+            # safe overlap crop as above
+            if p.dim() == 4 and mask_f.dim() == 4:
+                Hp, Wp = p.shape[2], p.shape[3]
+                Hm, Wm = mask_f.shape[2], mask_f.shape[3]
+                h = min(Hp, Hm); w = min(Wp, Wm)
+                if (h != Hm) or (w != Wm):
+                    mask_f = mask_f[:, :, :h, :w]
+                if (h != Hp) or (w != Wp):
+                    p = p[:, :, :h, :w]
+
+            vrun += loss_fn(p, mask_f).item()
+            try:
+                dices.append(dice_metric(p, mask_f))
+            except Exception:
+                # dice_metric expects logits or probs? it thresholds >0.5 internally.
+                # convert logits -> probs for robustness
+                probs = torch.sigmoid(p)
+                dices.append(dice_metric(probs, mask_f))
+
+    avg_loss = run / max(1, len(train_loader))
+    history_losses.append(avg_loss)
+    avg_val = vrun / max(1, len(val_loader))
+    history_val.append(avg_val)
+    avg_dice = float(np.mean(dices)) if len(dices) else 0.0
+    history_dice.append(avg_dice)
+
     print(f"Epoch {epoch+1}/{args.epochs} | Train: {avg_loss:.4f} | Val: {avg_val:.4f} | Dice: {avg_dice:.4f}")
 
-    if avg_dice>best_dice: 
-        best_dice=avg_dice
-        wait=0
-    else: 
-        wait+=1;    
-    if wait>=stop_wait:
-        print("Early stopping epoch",epoch+1); 
+    # early stopping logic
+    if avg_dice > best_dice:
+        best_dice = avg_dice
+        wait = 0
+        # save best model (optional)
+        torch.save(model.state_dict(), os.path.join(args.save_dir, "best_unet_vit.pth"))
+    else:
+        wait += 1
+
+    if wait >= stop_wait:
+        print("Early stopping epoch", epoch+1)
         break
 
-    scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max',factor=0.5,patience=5)
+    # scheduler expecting a metric (you used mode='max')
     scheduler.step(avg_dice)
 
-scheduler.step(avg_dice); scheduler.step(avg_dice)
+# final scheduler calls (if you still want them)
+try:
+    scheduler.step(avg_dice)
+    scheduler.step(avg_dice)
+except Exception:
+    pass
 
 # Save model
 mp=os.path.join(args.save_dir,"unet_vit_trained.pth"); os.makedirs(args.save_dir,exist_ok=True)
@@ -154,7 +263,7 @@ img_e, mask_e = val_ds[0]                  # img_e, mask_e shapes: (1, H, W)
 bimg = img_e.unsqueeze(0).to(device)      # -> (1, 1, H, W)
 with torch.no_grad():
     pm = torch.sigmoid(model(bimg)).cpu() # pm shape: (1, 1, Hp, Wp)  (maybe same H/W)
-
+    
 # select the single image prediction (H, W)
 pm_vis = pm[0, 0]  # shape: (Hp, Wp) as a tensor
 
