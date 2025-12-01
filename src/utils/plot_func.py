@@ -1,7 +1,7 @@
 import os
 
 import matplotlib.pyplot as plt
-from mpmath.function_docs import im
+import numpy as np
 
 
 def plot_losses_curves(train_losses, val_losses, save_dir, show=False):
@@ -69,9 +69,9 @@ def plot_prediction(image, label, pred, save_dir, epoch=None, show=False):
 
 def plot_data_transform(
     image,
-    transform: str | None = None,
     label=None,
     weight=None,
+    transform: str | None = None,
     save_dir=None,
     show=False,
 ):
@@ -81,8 +81,8 @@ def plot_data_transform(
     Parameters:
     - images: Tensor of shape (batch_size, C, H, W)
     - labels: Tensor of shape (batch_size, H, W) or None
-    - transform: Transform name
     - weights: Tensor of shape (batch_size, H, W) or None
+    - transform: Transform name
     - save_dir: Directory to save the plot
     - show: Whether to display the plot
     """
@@ -91,12 +91,12 @@ def plot_data_transform(
     datas = [image]
 
     titles = ["Image"]
-    if label:
+    if label is not None:
         cols += 1
         label = label.squeeze().cpu().numpy()
         datas.append(label)
         titles.append("Label")
-    if weight:
+    if weight is not None:
         cols += 1
         weight = weight.squeeze().cpu().numpy()
         datas.append(weight)
@@ -105,18 +105,18 @@ def plot_data_transform(
     fig, axes = plt.subplots(1, cols, figsize=(figwidth, 4))
 
     if cols == 1:
-        axes = axes.reshape(1, -1)
+        axes = [axes]
 
     for i in range(cols):
-        axes[0, i].imshow(datas[i], cmap="gray", vmin=0, vmax=1)
-        axes[0, i].set_title(titles[i], fontsize=14, fontweight="bold")
-        axes[0, i].axis("off")
+        axes[i].imshow(datas[i], cmap="gray", vmin=0, vmax=1)
+        if cols > 1:
+            axes[i].set_title(titles[i], fontsize=14, fontweight="bold")
+        axes[i].axis("off")
     plt.tight_layout()
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         plt.savefig(
-            os.path.join(save_dir),
-            f"plot_data_{transform}.svg",
+            os.path.join(save_dir, f"plot_data_{transform}.svg"),
             dpi=600,
             format="svg",
             bbox_inches="tight",
