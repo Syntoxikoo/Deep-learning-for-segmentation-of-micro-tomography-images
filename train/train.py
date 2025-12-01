@@ -1,4 +1,4 @@
-# patched train.py and testing notebook
+# train.py for training baseline unet with vit
 # includes: deep supervision, dice over full test set, test plots, saving loss/Dice curves, eval example, no rotation-expand mismatch
 
 # ======= TRAIN.PY =======
@@ -13,7 +13,7 @@ from PIL import Image
 torch.cuda.empty_cache()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../models")))
-from baseline_Unet_ViT import U_net_ViT
+from ..models.baseline_Unet_ViT import U_net_ViT
 
 parser = argparse.ArgumentParser(description="Train a U-Net ViT model for segmentation.")
 parser.add_argument("--img_data_path", type=str, default="../datas/original/train/imgs")

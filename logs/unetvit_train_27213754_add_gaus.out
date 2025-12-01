@@ -1,0 +1,172 @@
+Starting training script...
+IMG_DATA_PATH: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images
+MASK_DATA_PATH: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks
+SAVE_DIR: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models
+EPOCHS: 100
+LR: 1e-4
+BATCH_SIZE: 1
+Activating virtual environment...
+Save directory created/checked: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models
+Clearing CUDA cache...
+Executing Python training script...
+Train samples: 17
+Val samples: 5
+Using device: cuda
+Size: torch.Size([1, 1, 768, 768])
+Size: torch.Size([1, 64, 766, 766])
+Size: torch.Size([1, 64, 764, 764])
+Size: torch.Size([1, 64, 382, 382])
+Size: torch.Size([1, 128, 380, 380])
+Size: torch.Size([1, 128, 378, 378])
+Size: torch.Size([1, 128, 189, 189])
+Size: torch.Size([1, 256, 187, 187])
+Size: torch.Size([1, 256, 185, 185])
+Size: torch.Size([1, 256, 92, 92])
+Size: torch.Size([1, 512, 90, 90])
+Size: torch.Size([1, 512, 88, 88])
+Size: torch.Size([1, 1024, 88, 88])
+Size: torch.Size([1, 512, 88, 88])
+Size: torch.Size([1, 1024, 88, 88])
+Size: torch.Size([1, 1024, 88, 88])
+Size: torch.Size([1, 512, 86, 86])
+Size: torch.Size([1, 512, 84, 84])
+Size: torch.Size([1, 512, 168, 168])
+Size: torch.Size([1, 256, 168, 168])
+Size: torch.Size([1, 512, 168, 168])
+Size: torch.Size([1, 512, 168, 168])
+Size: torch.Size([1, 256, 166, 166])
+Size: torch.Size([1, 256, 164, 164])
+Size: torch.Size([1, 256, 328, 328])
+Size: torch.Size([1, 128, 328, 328])
+Size: torch.Size([1, 256, 328, 328])
+Size: torch.Size([1, 256, 328, 328])
+Size: torch.Size([1, 128, 326, 326])
+Size: torch.Size([1, 128, 324, 324])
+Size: torch.Size([1, 128, 648, 648])
+Size: torch.Size([1, 64, 648, 648])
+Size: torch.Size([1, 128, 648, 648])
+Size: torch.Size([1, 128, 648, 648])
+Size: torch.Size([1, 64, 646, 646])
+Size: torch.Size([1, 64, 644, 644])
+Epoch 1/100 | Train Loss: 0.8611 | Val Loss: 1.0210 | Val Dice: 0.9421
+Epoch 2/100 | Train Loss: 0.6494 | Val Loss: 0.7064 | Val Dice: 0.9421
+Epoch 3/100 | Train Loss: 0.5837 | Val Loss: 0.5735 | Val Dice: 0.9392
+Epoch 4/100 | Train Loss: 0.5514 | Val Loss: 0.6138 | Val Dice: 0.9297
+Epoch 5/100 | Train Loss: 0.5218 | Val Loss: 0.5940 | Val Dice: 0.9148
+Epoch 6/100 | Train Loss: 0.4856 | Val Loss: 0.5390 | Val Dice: 0.9350
+Epoch 7/100 | Train Loss: 0.4548 | Val Loss: 0.5049 | Val Dice: 0.9429
+Epoch 8/100 | Train Loss: 0.4375 | Val Loss: 0.4899 | Val Dice: 0.9440
+Epoch 9/100 | Train Loss: 0.4125 | Val Loss: 0.4881 | Val Dice: 0.9421
+Epoch 10/100 | Train Loss: 0.4022 | Val Loss: 0.5262 | Val Dice: 0.9268
+Epoch 11/100 | Train Loss: 0.3893 | Val Loss: 0.4920 | Val Dice: 0.9342
+Epoch 12/100 | Train Loss: 0.3591 | Val Loss: 0.5156 | Val Dice: 0.9259
+Epoch 13/100 | Train Loss: 0.3428 | Val Loss: 0.4368 | Val Dice: 0.9470
+Epoch 14/100 | Train Loss: 0.3218 | Val Loss: 0.4361 | Val Dice: 0.9474
+Epoch 15/100 | Train Loss: 0.3041 | Val Loss: 0.4685 | Val Dice: 0.9400
+Epoch 16/100 | Train Loss: 0.2915 | Val Loss: 0.4355 | Val Dice: 0.9445
+Epoch 17/100 | Train Loss: 0.2820 | Val Loss: 0.4970 | Val Dice: 0.9300
+Epoch 18/100 | Train Loss: 0.2696 | Val Loss: 0.4515 | Val Dice: 0.9414
+Epoch 19/100 | Train Loss: 0.2606 | Val Loss: 0.4289 | Val Dice: 0.9452
+Epoch 20/100 | Train Loss: 0.2467 | Val Loss: 0.4718 | Val Dice: 0.9316
+Epoch 21/100 | Train Loss: 0.2330 | Val Loss: 0.4214 | Val Dice: 0.9469
+Epoch 22/100 | Train Loss: 0.2221 | Val Loss: 0.4285 | Val Dice: 0.9452
+Epoch 23/100 | Train Loss: 0.2151 | Val Loss: 0.4378 | Val Dice: 0.9443
+Early stopping at epoch 24
+Final Average Dice Score over Validation Images: 0.9452
+Model saved to /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models/unet_vit_trained.pth ✔
+Example prediction and ground truth saved to /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models/predictions/pred_example.tif ✔
+Training script finished successfully.
+
+------------------------------------------------------------
+Sender: LSF System <lsfadmin@hpc.dtu.dk>
+Subject: Job 27213754: <UnetViTTrain> in cluster <dcc> Done
+
+Job <UnetViTTrain> was submitted from host <n-62-11-12> by user <s241646> in cluster <dcc> at Sat Nov 29 14:59:12 2025
+Job was executed on host(s) <4*n-62-18-13>, in queue <c02516>, as user <s241646> in cluster <dcc> at Sat Nov 29 14:59:14 2025
+</zhome/0c/9/212141> was used as the home directory.
+</zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images> was used as the working directory.
+Started at Sat Nov 29 14:59:14 2025
+Terminated at Sat Nov 29 15:03:17 2025
+Results reported at Sat Nov 29 15:03:17 2025
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+#!/bin/bash
+
+# ------------------------------
+# BSUB directives (LSF scheduler)
+# ------------------------------
+
+# Queue with GPU nodes (change if needed)
+#BSUB -q c02516
+
+# Request 1 GPU in exclusive mode (if supported by your cluster)
+#BSUB -gpu "num=1:mode=exclusive_process"
+
+# Job name
+#BSUB -J UnetViTTrain
+
+# Number of CPU cores
+#BSUB -n 4
+
+# Keep job on a single node
+#BSUB -R "span[hosts=1]"
+
+# Request sufficient RAM (increase if needed)
+#BSUB -R "rusage[mem=20GB]"
+
+# Wall time (hh:mm)
+#BSUB -W 08:00
+
+# Absolute paths for log files
+#BSUB -o /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.out
+#BSUB -e /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.err
+
+
+# ------------------------------
+# Script starts
+# ------------------------------
+
+set -e
+
+# ------------------------------
+# Configuration
+# ------------------------------
+IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
+MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
+SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
+
+EPOCHS=100
+LR=1e-4
+BATCH_SIZE=1  # can reduce to 2 or 1 if OOM persists
+
+# Set PyTorch environment variable to reduce fragmentation
+
+(... more ...)
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   236.78 sec.
+    Max Memory :                                 924 MB
+    Average Memory :                             913.00 MB
+    Total Requested Memory :                     81920.00 MB
+    Delta Memory :                               80996.00 MB
+    Max Swap :                                   -
+    Max Processes :                              4
+    Max Threads :                                8
+    Run time :                                   257 sec.
+    Turnaround time :                            245 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file </zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_27213754.err> for stderr output of this job.
+
