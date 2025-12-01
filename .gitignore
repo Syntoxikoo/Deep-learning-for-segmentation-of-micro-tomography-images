@@ -60,5 +60,5 @@ dev_specific
 
 .github
 .github/
-
-datas
+checkpoints/
+logs/
