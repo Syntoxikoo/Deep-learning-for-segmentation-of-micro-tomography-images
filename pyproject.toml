@@ -1,14 +1,30 @@
 [project]
 name = "deep-learning-for-segmentation-of-micro-tomography-images"
 version = "0.1.0"
-description = "By combining deep learning techniques with semi-supervised methods, the project aims to build a robust segmentation framework capable of identifying porosities across the entire dataset, ultimately supporting downstream tasks such as deformation tracking and material characterization."
-readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
+    "matplotlib>=3.10.7",
     "numpy>=2.3.4",
-    "ruff>=0.14.3",
+    "pandas>=2.3.3",
+    "scikit-image>=0.25.2",
     "scikit-learn>=1.7.2",
     "scipy>=1.16.3",
-    "torch>=2.9.0",
-    "torchvision>=0.24.0",
+    "tifffile>=2025.10.16",
+    "torch>=2.5.0",
+    "torchcodec>=0.8.1",
+    "torchvision>=0.20.0",
+]
+# install with uv sync extra local
+[project.optional-dependencies]
+local = [
+    "black>=25.11.0",         
+    "ruff>=0.14.3",           
+    "ffmpeg>=1.4",
+    "glfw>=2.10.0",
+    "jupyter-rfb>=0.5.4",
+    "pygfx>=0.15.3",
+    "vispy>=0.15.2",
+    "ndv>=0.4.0",
+    "matplotlib-inline>=0.2.1",
+    "mkinit>=1.1.0",
 ]

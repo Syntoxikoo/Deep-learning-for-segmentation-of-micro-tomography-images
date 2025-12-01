@@ -16,6 +16,7 @@ wheels/
 share/python-wheels/
 .installed.cfg
 MANIFEST
+*.pth
 
 pip-log.txt
 pip-delete-this-directory.txt
@@ -59,5 +60,5 @@ dev_specific
 
 .github
 .github/
-
-datas
+checkpoints/
+logs/
