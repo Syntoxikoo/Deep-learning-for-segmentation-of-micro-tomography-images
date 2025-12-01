@@ -1,5 +1,5 @@
-from torch import nn
 import torch
+from torch import nn
 
 
 class WeightedCrossEntropyLoss(nn.Module):
@@ -22,5 +22,22 @@ class WeightedCrossEntropyLossV2(nn.Module):
         self.loss_fn = nn.CrossEntropyLoss(reduction="none")
 
     def forward(self, logits, targets, weights):
-        loss = self.loss_fn(logits, targets) * weights
-        return loss.mean()
+        loss = self.loss_fn(logits, targets)
+        w_loss = loss * weights.float()
+        f_loss = w_loss.sum() / (weights.sum() + 1e-8)
+        return f_loss
+
+
+class DiceLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs, targets):
+        inputs = torch.softmax(inputs, dim=1)
+
+        input_obj = inputs[:, 1, :, :]
+        target_obj = (targets == 1).float()
+
+        intersection = (input_obj * target_obj).sum()
+        dice = (2.0 * intersection) / (input_obj.sum() + target_obj.sum() + 1e-8)
+        return 1 - dice

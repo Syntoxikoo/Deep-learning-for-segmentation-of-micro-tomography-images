@@ -10,13 +10,18 @@ class DoubleConv(nn.Module):
     ):
         super().__init__()
         pad = kwargs.get("padding", filter_size // 2)
-        layers = [
+        layers: list[nn.Module] = [
             nn.Conv2d(
                 in_ch, out_ch, kernel_size=filter_size, padding=pad, bias=not normalize
             ),
         ]
         if normalize:
-            layers.append(nn.BatchNorm2d(out_ch))
+            if kwargs.get("batch_norm", True):
+                layers.append(nn.BatchNorm2d(out_ch))
+            else:
+                layers.append(
+                    nn.GroupNorm(num_groups=32, num_channels=out_ch)
+                )  # TODO : 32 might not be opti
         layers.append(nn.ReLU(inplace=True))
 
         layers.append(
@@ -25,7 +30,10 @@ class DoubleConv(nn.Module):
             )
         )
         if normalize:
-            layers.append(nn.BatchNorm2d(out_ch))
+            if kwargs.get("batch_norm", True):
+                layers.append(nn.BatchNorm2d(out_ch))
+            else:
+                layers.append(nn.GroupNorm(num_groups=32, num_channels=out_ch))
         layers.append(nn.ReLU(inplace=True))
 
         if dropout and dropout > 0.0:
@@ -145,6 +153,7 @@ class UNet(nn.Module):
         filter_size: kernel size for convs (3 recommended)
         dropout: dropout rate for regularization
         padding: padding size for convolutions (default: filter_size//2)
+        batchsize: if <=8 -> use GroupNorm instead of BatchNorm
     """
 
     def __init__(
@@ -165,7 +174,8 @@ class UNet(nn.Module):
         self.bilinear = bilinear
         self.normalize = normalize
         self.filter_size = filter_size
-
+        batch_norm = kwargs.get("batchsize", 8) >= 8
+        kwargs["batch_norm"] = batch_norm
         # Encoder path
         self.inc = DoubleConv(
             in_channels,
@@ -259,7 +269,7 @@ def init_weights(m):
         nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
         if m.bias is not None:
             nn.init.constant_(m.bias, 0.0)
-    elif isinstance(m, nn.BatchNorm2d):
+    elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
         nn.init.constant_(m.weight, 1.0)
         nn.init.constant_(m.bias, 0.0)
 
