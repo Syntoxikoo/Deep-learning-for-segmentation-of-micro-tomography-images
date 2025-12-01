@@ -53,12 +53,12 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 scale=(0.8, 1.2),
                 interpolation=v2.InterpolationMode.BILINEAR,
             ),
-            # v2.ElasticTransform(
-            #     alpha=50,
-            #     sigma=5,
-            # ),
-            # v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
-            # v2.ColorJitter(brightness=0.2, contrast=0.2),
+            v2.ElasticTransform(
+                alpha=50,
+                sigma=5,
+            ),
+            v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
+            v2.ColorJitter(brightness=0.2, contrast=0.2),
         ]
     )
     pair_transform = PairTransform(transform)
@@ -133,7 +133,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                     out = model(images)
                     ce_loss = ce_loss_fn(out, labels, weights)
                     dice_loss = dice_loss_fn(out, labels)
-                    loss = 5 * dice_loss + ce_loss
+                    loss = dice_loss + ce_loss
 
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
@@ -146,7 +146,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
-                loss = 5 * dice_loss + ce_loss
+                loss = dice_loss + ce_loss
                 loss.backward()
                 optimizer.step()
 
@@ -174,7 +174,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
-                loss = 5 * dice_loss + ce_loss
+                loss = dice_loss + ce_loss
                 test_loss_list.append(loss.item())
 
                 prediction = torch.argmax(out, dim=1)
