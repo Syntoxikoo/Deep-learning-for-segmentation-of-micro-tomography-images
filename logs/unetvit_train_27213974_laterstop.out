@@ -1,0 +1,205 @@
+Starting training script...
+IMG_DATA_PATH: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images
+MASK_DATA_PATH: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks
+SAVE_DIR: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models
+EPOCHS: 100
+LR: 1e-4
+BATCH_SIZE: 1
+Activating virtual environment...
+Save directory created/checked: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models
+Clearing CUDA cache...
+Executing Python training script...
+Train samples: 17
+Val samples: 5
+Using device: cuda
+Size: torch.Size([1, 1, 768, 768])
+Size: torch.Size([1, 64, 766, 766])
+Size: torch.Size([1, 64, 764, 764])
+Size: torch.Size([1, 64, 382, 382])
+Size: torch.Size([1, 128, 380, 380])
+Size: torch.Size([1, 128, 378, 378])
+Size: torch.Size([1, 128, 189, 189])
+Size: torch.Size([1, 256, 187, 187])
+Size: torch.Size([1, 256, 185, 185])
+Size: torch.Size([1, 256, 92, 92])
+Size: torch.Size([1, 512, 90, 90])
+Size: torch.Size([1, 512, 88, 88])
+Size: torch.Size([1, 1024, 88, 88])
+Size: torch.Size([1, 512, 88, 88])
+Size: torch.Size([1, 1024, 88, 88])
+Size: torch.Size([1, 1024, 88, 88])
+Size: torch.Size([1, 512, 86, 86])
+Size: torch.Size([1, 512, 84, 84])
+Size: torch.Size([1, 512, 168, 168])
+Size: torch.Size([1, 256, 168, 168])
+Size: torch.Size([1, 512, 168, 168])
+Size: torch.Size([1, 512, 168, 168])
+Size: torch.Size([1, 256, 166, 166])
+Size: torch.Size([1, 256, 164, 164])
+Size: torch.Size([1, 256, 328, 328])
+Size: torch.Size([1, 128, 328, 328])
+Size: torch.Size([1, 256, 328, 328])
+Size: torch.Size([1, 256, 328, 328])
+Size: torch.Size([1, 128, 326, 326])
+Size: torch.Size([1, 128, 324, 324])
+Size: torch.Size([1, 128, 648, 648])
+Size: torch.Size([1, 64, 648, 648])
+Size: torch.Size([1, 128, 648, 648])
+Size: torch.Size([1, 128, 648, 648])
+Size: torch.Size([1, 64, 646, 646])
+Size: torch.Size([1, 64, 644, 644])
+Epoch 1/100 | Train Loss: 0.8260 | Val Loss: 0.9306 | Val Dice: 0.9469
+Epoch 2/100 | Train Loss: 0.6499 | Val Loss: 0.5958 | Val Dice: 0.9469
+Epoch 3/100 | Train Loss: 0.5861 | Val Loss: 0.5469 | Val Dice: 0.9462
+Epoch 4/100 | Train Loss: 0.5448 | Val Loss: 0.5630 | Val Dice: 0.9230
+Epoch 5/100 | Train Loss: 0.5311 | Val Loss: 0.5759 | Val Dice: 0.9178
+Epoch 6/100 | Train Loss: 0.4931 | Val Loss: 0.4940 | Val Dice: 0.9476
+Epoch 7/100 | Train Loss: 0.4691 | Val Loss: 0.5101 | Val Dice: 0.9408
+Epoch 8/100 | Train Loss: 0.4472 | Val Loss: 0.5028 | Val Dice: 0.9501
+Epoch 9/100 | Train Loss: 0.4252 | Val Loss: 0.4480 | Val Dice: 0.9491
+Epoch 10/100 | Train Loss: 0.4076 | Val Loss: 0.4310 | Val Dice: 0.9524
+Epoch 11/100 | Train Loss: 0.3869 | Val Loss: 0.4455 | Val Dice: 0.9513
+Epoch 12/100 | Train Loss: 0.3617 | Val Loss: 0.4315 | Val Dice: 0.9524
+Epoch 13/100 | Train Loss: 0.3402 | Val Loss: 0.5128 | Val Dice: 0.9332
+Epoch 14/100 | Train Loss: 0.3337 | Val Loss: 0.4326 | Val Dice: 0.9491
+Epoch 15/100 | Train Loss: 0.3165 | Val Loss: 0.4202 | Val Dice: 0.9500
+Epoch 16/100 | Train Loss: 0.3073 | Val Loss: 0.4011 | Val Dice: 0.9561
+Epoch 17/100 | Train Loss: 0.2859 | Val Loss: 0.3948 | Val Dice: 0.9550
+Epoch 18/100 | Train Loss: 0.2730 | Val Loss: 0.3892 | Val Dice: 0.9565
+Epoch 19/100 | Train Loss: 0.2650 | Val Loss: 0.3950 | Val Dice: 0.9538
+Epoch 20/100 | Train Loss: 0.2545 | Val Loss: 0.3886 | Val Dice: 0.9546
+Epoch 21/100 | Train Loss: 0.2437 | Val Loss: 0.3820 | Val Dice: 0.9552
+Epoch 22/100 | Train Loss: 0.2390 | Val Loss: 0.3819 | Val Dice: 0.9552
+Epoch 23/100 | Train Loss: 0.2363 | Val Loss: 0.4008 | Val Dice: 0.9493
+Epoch 24/100 | Train Loss: 0.2268 | Val Loss: 0.3740 | Val Dice: 0.9563
+Epoch 25/100 | Train Loss: 0.2134 | Val Loss: 0.3617 | Val Dice: 0.9573
+Epoch 26/100 | Train Loss: 0.2013 | Val Loss: 0.3604 | Val Dice: 0.9583
+Epoch 27/100 | Train Loss: 0.1936 | Val Loss: 0.3551 | Val Dice: 0.9588
+Epoch 28/100 | Train Loss: 0.1880 | Val Loss: 0.3604 | Val Dice: 0.9580
+Epoch 29/100 | Train Loss: 0.1842 | Val Loss: 0.3526 | Val Dice: 0.9589
+Epoch 30/100 | Train Loss: 0.1806 | Val Loss: 0.3651 | Val Dice: 0.9571
+Epoch 31/100 | Train Loss: 0.1787 | Val Loss: 0.3502 | Val Dice: 0.9592
+Epoch 32/100 | Train Loss: 0.1755 | Val Loss: 0.3575 | Val Dice: 0.9579
+Epoch 33/100 | Train Loss: 0.1717 | Val Loss: 0.3515 | Val Dice: 0.9587
+Epoch 34/100 | Train Loss: 0.1705 | Val Loss: 0.3619 | Val Dice: 0.9576
+Epoch 35/100 | Train Loss: 0.1704 | Val Loss: 0.3474 | Val Dice: 0.9587
+Epoch 36/100 | Train Loss: 0.1661 | Val Loss: 0.3554 | Val Dice: 0.9574
+Epoch 37/100 | Train Loss: 0.1610 | Val Loss: 0.3457 | Val Dice: 0.9594
+Epoch 38/100 | Train Loss: 0.1585 | Val Loss: 0.3585 | Val Dice: 0.9575
+Epoch 39/100 | Train Loss: 0.1565 | Val Loss: 0.3533 | Val Dice: 0.9581
+Epoch 40/100 | Train Loss: 0.1540 | Val Loss: 0.3754 | Val Dice: 0.9555
+Epoch 41/100 | Train Loss: 0.1515 | Val Loss: 0.3565 | Val Dice: 0.9572
+Epoch 42/100 | Train Loss: 0.1526 | Val Loss: 0.3712 | Val Dice: 0.9545
+Epoch 43/100 | Train Loss: 0.1511 | Val Loss: 0.3606 | Val Dice: 0.9568
+Epoch 44/100 | Train Loss: 0.1465 | Val Loss: 0.3547 | Val Dice: 0.9572
+Epoch 45/100 | Train Loss: 0.1416 | Val Loss: 0.3566 | Val Dice: 0.9573
+Epoch 46/100 | Train Loss: 0.1377 | Val Loss: 0.3526 | Val Dice: 0.9582
+Epoch 47/100 | Train Loss: 0.1362 | Val Loss: 0.3635 | Val Dice: 0.9572
+Epoch 48/100 | Train Loss: 0.1349 | Val Loss: 0.3585 | Val Dice: 0.9580
+Epoch 49/100 | Train Loss: 0.1333 | Val Loss: 0.3566 | Val Dice: 0.9580
+Epoch 50/100 | Train Loss: 0.1321 | Val Loss: 0.3527 | Val Dice: 0.9587
+Epoch 51/100 | Train Loss: 0.1308 | Val Loss: 0.3660 | Val Dice: 0.9572
+Epoch 52/100 | Train Loss: 0.1296 | Val Loss: 0.3674 | Val Dice: 0.9571
+Epoch 53/100 | Train Loss: 0.1290 | Val Loss: 0.3692 | Val Dice: 0.9572
+Epoch 54/100 | Train Loss: 0.1281 | Val Loss: 0.3642 | Val Dice: 0.9580
+Epoch 55/100 | Train Loss: 0.1274 | Val Loss: 0.3745 | Val Dice: 0.9568
+Epoch 56/100 | Train Loss: 0.1268 | Val Loss: 0.3693 | Val Dice: 0.9575
+Early stopping at epoch 57
+Final Average Dice Score over Validation Images: 0.9583
+Model saved to /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models/unet_vit_trained.pth ✔
+Example prediction and ground truth saved to /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models/predictions/pred_example.tif ✔
+Training script finished successfully.
+
+------------------------------------------------------------
+Sender: LSF System <lsfadmin@hpc.dtu.dk>
+Subject: Job 27213974: <UnetViTTrain> in cluster <dcc> Done
+
+Job <UnetViTTrain> was submitted from host <n-62-11-12> by user <s241646> in cluster <dcc> at Sat Nov 29 15:18:25 2025
+Job was executed on host(s) <4*n-62-18-13>, in queue <c02516>, as user <s241646> in cluster <dcc> at Sat Nov 29 15:18:26 2025
+</zhome/0c/9/212141> was used as the home directory.
+</zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images> was used as the working directory.
+Started at Sat Nov 29 15:18:26 2025
+Terminated at Sat Nov 29 15:27:44 2025
+Results reported at Sat Nov 29 15:27:44 2025
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+#!/bin/bash
+
+# ------------------------------
+# BSUB directives (LSF scheduler)
+# ------------------------------
+
+# Queue with GPU nodes (change if needed)
+#BSUB -q c02516
+
+# Request 1 GPU in exclusive mode (if supported by your cluster)
+#BSUB -gpu "num=1:mode=exclusive_process"
+
+# Job name
+#BSUB -J UnetViTTrain
+
+# Number of CPU cores
+#BSUB -n 4
+
+# Keep job on a single node
+#BSUB -R "span[hosts=1]"
+
+# Request sufficient RAM (increase if needed)
+#BSUB -R "rusage[mem=20GB]"
+
+# Wall time (hh:mm)
+#BSUB -W 08:00
+
+# Absolute paths for log files
+#BSUB -o /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.out
+#BSUB -e /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.err
+
+
+# ------------------------------
+# Script starts
+# ------------------------------
+
+set -e
+
+# ------------------------------
+# Configuration
+# ------------------------------
+IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
+MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
+SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
+
+EPOCHS=100
+LR=1e-4
+BATCH_SIZE=1  # can reduce to 2 or 1 if OOM persists
+
+# Set PyTorch environment variable to reduce fragmentation
+
+(... more ...)
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   553.18 sec.
+    Max Memory :                                 923 MB
+    Average Memory :                             915.17 MB
+    Total Requested Memory :                     81920.00 MB
+    Delta Memory :                               80997.00 MB
+    Max Swap :                                   -
+    Max Processes :                              4
+    Max Threads :                                8
+    Run time :                                   568 sec.
+    Turnaround time :                            559 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file </zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_27213974.err> for stderr output of this job.
+

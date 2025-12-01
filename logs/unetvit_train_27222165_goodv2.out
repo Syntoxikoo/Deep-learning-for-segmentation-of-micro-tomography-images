@@ -1,0 +1,195 @@
+Starting training script...
+IMG_DATA_PATH: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images
+MASK_DATA_PATH: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks
+SAVE_DIR: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models
+EPOCHS: 100
+LR: 1e-4
+BATCH_SIZE: 1
+Activating virtual environment...
+Save directory created/checked: /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models
+Clearing CUDA cache...
+Executing Python training script...
+Train samples: 17 | Val samples: 5
+Size: torch.Size([1, 1024, 96, 96])
+Size: torch.Size([1, 512, 96, 96])
+Size: torch.Size([1, 1024, 96, 96])
+Size: torch.Size([1, 512, 192, 192])
+Size: torch.Size([1, 256, 192, 192])
+Size: torch.Size([1, 512, 192, 192])
+Size: torch.Size([1, 256, 384, 384])
+Size: torch.Size([1, 128, 384, 384])
+Size: torch.Size([1, 256, 384, 384])
+Size: torch.Size([1, 128, 768, 768])
+Size: torch.Size([1, 64, 768, 768])
+Size: torch.Size([1, 128, 768, 768])
+Epoch 1/100 | Train: 0.8874 | Val: 0.9391 | Dice: 0.0000
+Epoch 2/100 | Train: 0.6593 | Val: 0.5747 | Dice: 0.9385
+Epoch 3/100 | Train: 0.5689 | Val: 0.6084 | Dice: 0.9354
+Epoch 4/100 | Train: 0.5101 | Val: 0.5534 | Dice: 0.9424
+Epoch 5/100 | Train: 0.5032 | Val: 0.5459 | Dice: 0.9477
+Epoch 6/100 | Train: 0.4515 | Val: 0.4673 | Dice: 0.9544
+Epoch 7/100 | Train: 0.4318 | Val: 0.4739 | Dice: 0.9560
+Epoch 8/100 | Train: 0.4280 | Val: 0.4609 | Dice: 0.9556
+Epoch 9/100 | Train: 0.4018 | Val: 0.4587 | Dice: 0.9582
+Epoch 10/100 | Train: 0.4020 | Val: 0.4548 | Dice: 0.9559
+Epoch 11/100 | Train: 0.3841 | Val: 0.4288 | Dice: 0.9620
+Epoch 12/100 | Train: 0.3801 | Val: 0.4293 | Dice: 0.9599
+Epoch 13/100 | Train: 0.3481 | Val: 0.4078 | Dice: 0.9636
+Epoch 14/100 | Train: 0.3490 | Val: 0.4471 | Dice: 0.9574
+Epoch 15/100 | Train: 0.3385 | Val: 0.4166 | Dice: 0.9570
+Epoch 16/100 | Train: 0.3344 | Val: 0.4150 | Dice: 0.9585
+Epoch 17/100 | Train: 0.3322 | Val: 0.4079 | Dice: 0.9581
+Epoch 18/100 | Train: 0.3050 | Val: 0.3810 | Dice: 0.9647
+Epoch 19/100 | Train: 0.2974 | Val: 0.4182 | Dice: 0.9541
+Epoch 20/100 | Train: 0.3033 | Val: 0.3846 | Dice: 0.9605
+Epoch 21/100 | Train: 0.3008 | Val: 0.3631 | Dice: 0.9647
+Epoch 22/100 | Train: 0.2761 | Val: 0.3656 | Dice: 0.9629
+Epoch 23/100 | Train: 0.2747 | Val: 0.3361 | Dice: 0.9682
+Epoch 24/100 | Train: 0.2711 | Val: 0.3837 | Dice: 0.9584
+Epoch 25/100 | Train: 0.2669 | Val: 0.3948 | Dice: 0.9548
+Epoch 26/100 | Train: 0.2715 | Val: 0.3457 | Dice: 0.9639
+Epoch 27/100 | Train: 0.2576 | Val: 0.3425 | Dice: 0.9658
+Epoch 28/100 | Train: 0.2473 | Val: 0.3261 | Dice: 0.9683
+Epoch 29/100 | Train: 0.2399 | Val: 0.3205 | Dice: 0.9687
+Epoch 30/100 | Train: 0.2386 | Val: 0.3006 | Dice: 0.9683
+Epoch 31/100 | Train: 0.2325 | Val: 0.3041 | Dice: 0.9683
+Epoch 32/100 | Train: 0.2218 | Val: 0.3224 | Dice: 0.9648
+Epoch 33/100 | Train: 0.2109 | Val: 0.3111 | Dice: 0.9661
+Epoch 34/100 | Train: 0.2254 | Val: 0.3309 | Dice: 0.9638
+Epoch 35/100 | Train: 0.2109 | Val: 0.2787 | Dice: 0.9712
+Epoch 36/100 | Train: 0.2095 | Val: 0.3280 | Dice: 0.9635
+Epoch 37/100 | Train: 0.1917 | Val: 0.2876 | Dice: 0.9697
+Epoch 38/100 | Train: 0.1943 | Val: 0.2888 | Dice: 0.9684
+Epoch 39/100 | Train: 0.1911 | Val: 0.2926 | Dice: 0.9692
+Epoch 40/100 | Train: 0.1987 | Val: 0.2950 | Dice: 0.9666
+Epoch 41/100 | Train: 0.1815 | Val: 0.2721 | Dice: 0.9705
+Epoch 42/100 | Train: 0.1793 | Val: 0.2741 | Dice: 0.9706
+Epoch 43/100 | Train: 0.1754 | Val: 0.2839 | Dice: 0.9673
+Epoch 44/100 | Train: 0.1632 | Val: 0.2555 | Dice: 0.9714
+Epoch 45/100 | Train: 0.1671 | Val: 0.2596 | Dice: 0.9714
+Epoch 46/100 | Train: 0.1678 | Val: 0.2732 | Dice: 0.9686
+Epoch 47/100 | Train: 0.1662 | Val: 0.2867 | Dice: 0.9652
+Epoch 48/100 | Train: 0.1608 | Val: 0.2464 | Dice: 0.9720
+Epoch 49/100 | Train: 0.1549 | Val: 0.2593 | Dice: 0.9697
+Epoch 50/100 | Train: 0.1538 | Val: 0.2759 | Dice: 0.9664
+Epoch 51/100 | Train: 0.1415 | Val: 0.2847 | Dice: 0.9661
+Epoch 52/100 | Train: 0.1520 | Val: 0.2641 | Dice: 0.9674
+Epoch 53/100 | Train: 0.1463 | Val: 0.2493 | Dice: 0.9697
+Epoch 54/100 | Train: 0.1449 | Val: 0.2463 | Dice: 0.9708
+Epoch 55/100 | Train: 0.1421 | Val: 0.2499 | Dice: 0.9706
+Epoch 56/100 | Train: 0.1333 | Val: 0.2513 | Dice: 0.9703
+Epoch 57/100 | Train: 0.1244 | Val: 0.2409 | Dice: 0.9707
+Epoch 58/100 | Train: 0.1288 | Val: 0.2504 | Dice: 0.9697
+Epoch 59/100 | Train: 0.1304 | Val: 0.2315 | Dice: 0.9732
+Epoch 60/100 | Train: 0.1230 | Val: 0.2330 | Dice: 0.9725
+Epoch 61/100 | Train: 0.1268 | Val: 0.2421 | Dice: 0.9706
+Epoch 62/100 | Train: 0.1242 | Val: 0.2541 | Dice: 0.9690
+Epoch 63/100 | Train: 0.1090 | Val: 0.2527 | Dice: 0.9690
+Epoch 64/100 | Train: 0.1112 | Val: 0.2585 | Dice: 0.9688
+Epoch 65/100 | Train: 0.1089 | Val: 0.2254 | Dice: 0.9732
+Epoch 66/100 | Train: 0.1212 | Val: 0.2182 | Dice: 0.9731
+Epoch 67/100 | Train: 0.1070 | Val: 0.2520 | Dice: 0.9694
+Epoch 68/100 | Train: 0.1116 | Val: 0.2259 | Dice: 0.9732
+Epoch 69/100 | Train: 0.1134 | Val: 0.2325 | Dice: 0.9719
+Epoch 70/100 | Train: 0.1055 | Val: 0.2433 | Dice: 0.9694
+Epoch 71/100 | Train: 0.1027 | Val: 0.2405 | Dice: 0.9693
+Epoch 72/100 | Train: 0.1012 | Val: 0.2486 | Dice: 0.9685
+Epoch 73/100 | Train: 0.1041 | Val: 0.2245 | Dice: 0.9721
+Epoch 74/100 | Train: 0.1054 | Val: 0.2296 | Dice: 0.9715
+Early stopping epoch 74
+Model saved ✔ /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models/unet_vit_trained.pth
+Training script finished successfully.
+
+------------------------------------------------------------
+Sender: LSF System <lsfadmin@hpc.dtu.dk>
+Subject: Job 27222165: <UnetViTTrain> in cluster <dcc> Done
+
+Job <UnetViTTrain> was submitted from host <n-62-11-12> by user <s241646> in cluster <dcc> at Sun Nov 30 22:34:06 2025
+Job was executed on host(s) <4*n-62-18-13>, in queue <c02516>, as user <s241646> in cluster <dcc> at Sun Nov 30 22:34:08 2025
+</zhome/0c/9/212141> was used as the home directory.
+</zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images> was used as the working directory.
+Started at Sun Nov 30 22:34:08 2025
+Terminated at Sun Nov 30 22:45:17 2025
+Results reported at Sun Nov 30 22:45:17 2025
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+#!/bin/bash
+
+# ------------------------------
+# BSUB directives (LSF scheduler)
+# ------------------------------
+
+# Queue with GPU nodes (change if needed)
+#BSUB -q c02516
+
+# Request 1 GPU in exclusive mode (if supported by your cluster)
+#BSUB -gpu "num=1:mode=exclusive_process"
+
+# Job name
+#BSUB -J UnetViTTrain
+
+# Number of CPU cores
+#BSUB -n 4
+
+# Keep job on a single node
+#BSUB -R "span[hosts=1]"
+
+# Request sufficient RAM (increase if needed)
+#BSUB -R "rusage[mem=20GB]"
+
+# Wall time (hh:mm)
+#BSUB -W 08:00
+
+# Absolute paths for log files
+#BSUB -o /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.out
+#BSUB -e /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.err
+
+
+# ------------------------------
+# Script starts
+# ------------------------------
+
+set -e
+
+# ------------------------------
+# Configuration
+# ------------------------------
+IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
+MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
+SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
+
+EPOCHS=100
+LR=1e-4
+BATCH_SIZE=1  # can reduce to 2 or 1 if OOM persists
+
+# Set PyTorch environment variable to reduce fragmentation
+
+(... more ...)
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   663.27 sec.
+    Max Memory :                                 939 MB
+    Average Memory :                             805.00 MB
+    Total Requested Memory :                     81920.00 MB
+    Delta Memory :                               80981.00 MB
+    Max Swap :                                   -
+    Max Processes :                              4
+    Max Threads :                                8
+    Run time :                                   787 sec.
+    Turnaround time :                            671 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file </zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_27222165.err> for stderr output of this job.
+

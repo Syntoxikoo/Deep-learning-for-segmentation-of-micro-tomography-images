@@ -21,6 +21,9 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+datas/predictions
+models/predicted_models
+
 # Type checkers / linters caches
 .mypy_cache/
 .pyre/
@@ -57,3 +60,5 @@ dev_specific
 
 .github
 .github/
+
+datas
