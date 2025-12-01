@@ -1,13 +1,10 @@
-#baseline_Unet_ViT.py hybrid U-Net with transformer bottleneck
-
+# baseline_Unet_ViT.py  (fixed)
 import torch
 from torch import nn
 import torch.nn.functional as F
 
 
-class PrintSize(nn.Module): 
-    """Utility module to print current shape of a Tensor in Sequential, only at the first pass."""
-
+class PrintSize(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.first = True
@@ -19,17 +16,203 @@ class PrintSize(nn.Module):
         return x
 
 
+class DoubleConv(nn.Module):
+    """(Conv => BN? => ReLU) * 2 with same padding"""
+
+    def __init__(
+        self, in_ch, out_ch, filter_size=3, normalize=True, dropout=0.0, **kwargs
+    ):
+        super().__init__()
+        pad = kwargs.get("padding", filter_size // 2)
+        layers = [
+            nn.Conv2d(
+                in_ch, out_ch, kernel_size=filter_size, padding=pad, bias=not normalize
+            ),
+        ]
+        if normalize:
+            layers.append(nn.BatchNorm2d(out_ch))
+        layers.append(nn.ReLU(inplace=True))
+
+        layers.append(
+            nn.Conv2d(
+                out_ch, out_ch, kernel_size=filter_size, padding=pad, bias=not normalize
+            )
+        )
+        if normalize:
+            layers.append(nn.BatchNorm2d(out_ch))
+        layers.append(nn.ReLU(inplace=True))
+
+        if dropout and dropout > 0.0:
+            layers.append(nn.Dropout2d(dropout))
+
+        self.block = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.block(x)
 
 
-class ViTBottleneck(nn.Module):       # wrapper around PyTorch's nn.TransformerEncoder, operating on flattened (H*W) spatial tokens
+class Down(nn.Module):
+    """DoubleConv then MaxPool (return conv output for skip, and pooled for deeper)."""
+
+    def __init__(
+        self, in_ch, out_ch, filter_size=3, normalize=True, dropout=0.0, **kwargs
+    ):
+        super().__init__()
+        self.conv = DoubleConv(
+            in_ch,
+            out_ch,
+            filter_size=filter_size,
+            normalize=normalize,
+            dropout=dropout,
+            **kwargs,
+        )
+        self.pool = nn.MaxPool2d(2)
+
+    def forward(self, x):
+        out = self.conv(x)
+        pooled = self.pool(out)
+        return out, pooled
+
+
+class Up(nn.Module):
+    """Upscaling then double conv. Supports transposed conv or bilinear upsampling.
+    Robust center-cropping: crop whichever tensor is larger so the two match
+    before concatenation.
     """
-    ViT-style Transformer bottleneck used inside U_net_ViT.
 
-    Operates on a feature map of shape (B, C, H, W) by treating each spatial
-    location as a token of dimension C, applying a stack of TransformerEncoder
-    layers, and reshaping back to the same 4D shape.
-    """
+    def __init__(
+        self,
+        in_ch,
+        out_ch,
+        filter_size=3,
+        normalize=True,
+        upsampling="Ctranspose",
+        dropout=0.0,
+        **kwargs,
+    ):
+        super().__init__()
+        self.upsampling = upsampling
+        self.filter_size = filter_size
 
+        # up_out_ch is the channel count after upsampling (convtranspose halves channels)
+        up_out_ch = in_ch // 2 if in_ch // 2 >= 1 else in_ch
+        if upsampling == "Ctranspose":
+            self.up = nn.ConvTranspose2d(in_ch, up_out_ch, kernel_size=2, stride=2)
+        else:
+            self.up = nn.Sequential(
+                nn.Upsample(
+                    scale_factor=2,
+                    mode=upsampling,
+                    align_corners=(upsampling == "bilinear"),
+                ),
+                nn.Conv2d(in_ch, up_out_ch, kernel_size=1),
+            )
+
+        # after concat: channels = up_out_ch + out_ch
+        self.conv = DoubleConv(
+            up_out_ch + out_ch,
+            out_ch,
+            filter_size=filter_size,
+            normalize=normalize,
+            dropout=dropout,
+            **kwargs,
+        )
+
+    def _center_crop(self, tensor, target_h, target_w):
+        _, _, h, w = tensor.shape
+        if h == target_h and w == target_w:
+            return tensor
+        start_h = (h - target_h) // 2
+        start_w = (w - target_w) // 2
+        return tensor[:, :, start_h : start_h + target_h, start_w : start_w + target_w]
+
+    def forward(self, x, skip):
+        x = self.up(x)
+
+        if skip is None:
+            return self.conv(x)
+
+        x_h, x_w = x.shape[2], x.shape[3]
+        s_h, s_w = skip.shape[2], skip.shape[3]
+        target_h = min(x_h, s_h)
+        target_w = min(x_w, s_w)
+
+        if s_h != target_h or s_w != target_w:
+            skip = self._center_crop(skip, target_h, target_w)
+        if x_h != target_h or x_w != target_w:
+            x = self._center_crop(x, target_h, target_w)
+
+        x = torch.cat([skip, x], dim=1)
+        return self.conv(x)
+
+
+class Convblock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        filter_size: int = 3,
+        dropout_rate: float = 0.2,
+        **kwargs,
+    ):
+        super().__init__()
+
+        stride: int = kwargs.get("stride", 1)
+        dilation: int = kwargs.get("dilation", 1)
+        normalize: bool = kwargs.get("normalize", False)
+
+        padding = 1 if filter_size == 3 else 0
+
+        self.conv1 = nn.Conv2d(
+            in_channels, out_channels, filter_size, stride=stride, padding=padding, dilation=dilation
+        )
+        self.bNorm1 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
+        self.conv2 = nn.Conv2d(
+            out_channels, out_channels, filter_size, stride=stride, padding=padding, dilation=dilation
+        )
+        self.bNorm2 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
+
+        self.dropout = nn.Dropout2d(dropout_rate)
+        self.activation = nn.ReLU(True)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.bNorm1(out)
+        out = self.activation(out)
+        out = self.conv2(out)
+        out = self.bNorm2(out)
+        out = self.activation(out)
+        out = self.dropout(out)
+        return out
+
+
+class DecodeBlock(nn.Module):
+    # kept for compatibility (not used by main decoder which uses Up)
+    def __init__(self, in_channels, out_channels, up_size=2, **kwargs):
+        super().__init__()
+        upsampling = kwargs.get("upsampling", "nearest")
+
+        if up_size > 1:
+            self.up = nn.ConvTranspose2d(in_channels, in_channels, up_size, stride=up_size) \
+                if upsampling == "Ctranspose" \
+                else nn.Upsample(scale_factor=up_size, mode="bilinear", align_corners=False)
+
+        self.conv_block = Convblock(
+            in_channels + out_channels,
+            out_channels,
+            filter_size=3,
+            dropout_rate=0.2,
+            normalize=True,
+        )
+
+    def forward(self, x, residual):
+        x = self.up(x)
+        residual = F.interpolate(residual, size=x.shape[2:], mode="bilinear", align_corners=False)
+        x = torch.cat([residual, x], dim=1)
+        return self.conv_block(x)
+
+
+class ViTBottleneck(nn.Module):
     def __init__(
         self,
         channels: int,
@@ -57,33 +240,14 @@ class ViTBottleneck(nn.Module):       # wrapper around PyTorch's nn.TransformerE
         )
 
     def forward(self, x):
-        # x: (B, C, H, W)
         b, c, h, w = x.shape
-
-        # Flatten spatial dims into a sequence of tokens: (B, H*W, C)
-        tokens = x.view(b, c, h * w).permute(0, 2, 1)
-
-        # Apply Transformer encoder
+        tokens = x.view(b, c, h * w).permute(0, 2, 1)  # (B, H*W, C)
         tokens = self.encoder(tokens)
-
-        # Reshape back to (B, C, H, W)
         x_out = tokens.permute(0, 2, 1).view(b, c, h, w)
         return x_out
 
 
 class BottleneckViT(nn.Module):
-    """
-    Replacement for the original convolutional bottleneck.
-
-    Includes ADAPTIVE downsampling before the ViT:
-        - Repeatedly downsample until H*W <= max_tokens
-        - Conv → BN/ReLU → Conv → BN/ReLU
-        - Transformer (ViTBottleneck)
-        - Upsample back to original bottleneck resolution
-
-    This keeps memory under control even for large inputs like 1270x1350.
-    """
-
     def __init__(
         self,
         in_channels: int,
@@ -94,20 +258,20 @@ class BottleneckViT(nn.Module):
         vit_mlp_dim: int = None,
         vit_dropout: float = 0.2,
         filter_size: int = 3,
-        max_tokens: int = 2048,  # <--- safe upper bound for H*W seen by ViT
+        max_tokens: int = 2048,
     ):
         super().__init__()
 
         self.max_tokens = max_tokens
 
-        # Conv part (similar to original bottleneck)
-        self.conv1 = nn.Conv2d(in_channels, bottleneck_channels, filter_size)
+        # IMPORTANT: preserve spatial dims via padding
+        pad = filter_size // 2
+        self.conv1 = nn.Conv2d(in_channels, bottleneck_channels, filter_size, padding=pad)
         self.bn1 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
-        self.conv2 = nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size)
+        self.conv2 = nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size, padding=pad)
         self.bn2 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
         self.act = nn.ReLU(True)
 
-        # ViT bottleneck
         self.vit = ViTBottleneck(
             channels=bottleneck_channels,
             num_layers=vit_num_layers,
@@ -117,10 +281,8 @@ class BottleneckViT(nn.Module):
         )
 
     def forward(self, x):
-        # Remember original spatial size at the bottleneck
         b, c, h0, w0 = x.shape
 
-        # 1) Adaptively downsample until token count is safe
         x_down = x
         down_factor = 1
         while (
@@ -131,7 +293,6 @@ class BottleneckViT(nn.Module):
             x_down = F.max_pool2d(x_down, kernel_size=2, stride=2)
             down_factor *= 2
 
-        # 2) Conv block at reduced resolution
         x_down = self.conv1(x_down)
         x_down = self.bn1(x_down)
         x_down = self.act(x_down)
@@ -139,36 +300,23 @@ class BottleneckViT(nn.Module):
         x_down = self.bn2(x_down)
         x_down = self.act(x_down)
 
-        # 3) Transformer on reduced-resolution feature map
         x_down = self.vit(x_down)
 
-        # 4) Upsample back to the original bottleneck spatial size
         x_up = F.interpolate(
             x_down,
-            size=(h0, w0),  # explicitly restore original H,W
+            size=(h0, w0),
             mode="bilinear",
             align_corners=False,
         )
 
-        # print("[DEBUG] Bottleneck output:",
-        #     "min =", x_up.min().item(),
-        #     "max =", x_up.max().item(),
-        #     "mean =", x_up.mean().item(),
-        #     "shape =", tuple(x_up.shape))
-
         return x_up
 
-
-import torch
-from torch import nn
-import torch.nn.functional as F
-from baseline_Unet import DoubleConv, Down, Up  # baseline components
 
 class U_net_ViT(nn.Module):
     def __init__(
         self,
         in_channels=1,
-        num_classes=1,  # 1 channel for BCE+Dice
+        num_classes=1,
         features=(64, 128, 256, 512),
         bilinear=False,
         normalize=True,
@@ -179,7 +327,7 @@ class U_net_ViT(nn.Module):
         super().__init__()
         self.features = list(features)
 
-        # === Baseline encoder path ===
+        # Encoder (baseline style)
         self.inc = DoubleConv(in_channels, features[0], filter_size, normalize, dropout)
 
         self.downs = nn.ModuleList()
@@ -194,10 +342,11 @@ class U_net_ViT(nn.Module):
                 )
             )
 
-        # === ViT Bottleneck ===
+        # Bottleneck uses last encoder feature as input channels
+        bottleneck_channels = features[-1] * 2
         self.bottleneck = BottleneckViT(
             in_channels=features[-1],
-            bottleneck_channels=features[-1] * 2,
+            bottleneck_channels=bottleneck_channels,
             normalize=normalize,
             vit_num_layers=2,
             vit_num_heads=4,
@@ -206,9 +355,9 @@ class U_net_ViT(nn.Module):
             max_tokens=max_tokens,
         )
 
-        # === Baseline decoder path ===
+        # Decoder (baseline Up blocks)
         self.ups = nn.ModuleList()
-        prev_channels = features[-1] * 2
+        prev_channels = bottleneck_channels
         for feat in reversed(features):
             self.ups.append(
                 Up(
@@ -224,24 +373,28 @@ class U_net_ViT(nn.Module):
 
         self.outc = nn.Conv2d(features[0], num_classes, kernel_size=1)
 
-        # === Deep supervision heads (mirroring later decoder sizes) ===
-        ds_in = (512, 256, 128, 64)
+        # deep supervision heads (match decoder outputs: 512,256,128,64)
+        ds_in = tuple(reversed(features))  # (512,256,128,64)
         self.deep_heads = nn.ModuleList([nn.Conv2d(ch, 1, 1) for ch in ds_in])
 
     def forward(self, x):
-        # ---- Baseline encoder + skip collection ----
         skips = []
 
         x0 = self.inc(x)
+        # keep inc output as first skip (full resolution)
+        skips.append(x0)
+
+        # for each Down: get conv_out (skip) and pooled
         for down in self.downs:
             conv_out, x0 = down(x0)
             skips.append(conv_out)
 
-        # ---- Bottleneck ----
+        # now x0 is the pooled tensor entering bottleneck
         x = self.bottleneck(x0)
 
-        # ---- Decode + deep supervision ----
+        # prepare skips for decoding: deepest is last skip
         deepest = skips[-1] if skips else None
+        # we want shallower skips in reverse order excluding deepest
         skips = list(reversed(skips[:-1]))
 
         deep_preds = []
@@ -250,6 +403,7 @@ class U_net_ViT(nn.Module):
                 skip = deepest
             else:
                 skip = skips[i - 1] if i - 1 < len(skips) else None
+
             x = up(x, skip)
 
             if i < len(self.deep_heads):
@@ -260,8 +414,14 @@ class U_net_ViT(nn.Module):
         logits = self.outc(x)
         return logits, deep_preds
 
-if __name__ == "__main__": # dummy test
-    model = U_net_ViT()
+
+if __name__ == "__main__":
+    model = U_net_ViT(
+        in_channels=1,
+        num_classes=1,
+        features=(64, 128, 256, 512),
+    )
     x = torch.randn(1, 1, 572, 572)
-    x_out = model(x)
-    print("Out shape: ", x_out.shape)
+    logits, deep = model(x)
+    print("Out shape:", logits.shape)
+    print("Deep supervision levels:", len(deep))
