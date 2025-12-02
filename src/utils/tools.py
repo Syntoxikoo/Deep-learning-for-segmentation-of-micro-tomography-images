@@ -1,25 +1,11 @@
 import logging
 import os
 import sys
-import tifffile
 
+import matplotlib.pyplot as plt
+import tifffile
 import torch
 from torch import nn
-from torchvision.transforms.v2 import Compose
-import matplotlib.pyplot as plt
-
-
-class PairTransform:
-    def __init__(self, transform_pipeline: Compose):
-        self.transform_pipeline = transform_pipeline
-
-    def __call__(self, image, label):
-        if label.ndim == 2:
-            label = label.unsqueeze(0)
-
-        image, label = self.transform_pipeline(image, label)
-
-        return image, label.squeeze(0)
 
 
 def get_device():
@@ -110,7 +96,7 @@ def visualize_encoder_features(
         for i, down_layer in enumerate(model.downs):
             conv_out, pooled = down_layer(curr_x)
             feature_maps.append(conv_out)
-            layer_names.append(f"Encoder Layer {i+2} (Down)")
+            layer_names.append(f"Encoder Layer {i + 2} (Down)")
             curr_x = pooled
 
     figs = []
@@ -165,3 +151,12 @@ def load_tiff_image(path):
     if img.ndim == 3:  # takes middle slicee in case of 3D.
         img = img[img.shape[0] // 2]
     return img
+
+
+class AddGaussianNoise(object):
+    def __init__(self, sigma=0.02):
+        self.sigma = sigma
+
+    def __call__(self, tensor):
+        noise = torch.randn(tensor.size()) * self.sigma
+        return tensor + noise

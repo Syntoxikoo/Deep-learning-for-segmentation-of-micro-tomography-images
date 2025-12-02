@@ -12,11 +12,11 @@ from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
-from ...models import UNet
+from ...models.baseline_Unet import UNet
 from ...utils import (
+    TRANSFORM,
     DiceLoss,
     DiceMetric,
-    PairTransform,
     TOMODataset,
     WeightCELoss,
     get_device,
@@ -44,26 +44,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
 
     device, dl_workers = get_device()
     # Transforms
-    transform = v2.Compose(
-        [
-            v2.RandomRotation([-20, 20]),
-            v2.RandomVerticalFlip(p=0.5),
-            v2.RandomHorizontalFlip(p=0.5),
-            v2.RandomAffine(
-                degrees=[-180, 180],
-                translate=(0.1, 0.1),
-                scale=(0.8, 1.2),
-                interpolation=v2.InterpolationMode.BILINEAR,
-            ),
-            v2.ElasticTransform(
-                alpha=50,
-                sigma=5,
-            ),
-            v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
-            v2.ColorJitter(brightness=0.2, contrast=0.2),
-        ]
-    )
-    pair_transform = PairTransform(transform)
+    transform = v2.Compose(list(TRANSFORM.values()))
 
     # Load data
     if data_dir:
@@ -74,7 +55,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
     label_dir = os.path.join(data_path, "Original Masks")
 
     train_dataset = TOMODataset(
-        img_dir, label_dir=label_dir, split="train", transform=pair_transform
+        img_dir, label_dir=label_dir, split="train", transform=transform
     )
     test_dataset = TOMODataset(img_dir, label_dir=label_dir, split="test")
 
@@ -138,7 +119,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                     out = model(images)
                     ce_loss = ce_loss_fn(out, labels, weights)
                     dice_loss = dice_loss_fn(out, labels)
-                    loss = dice_loss
+                    loss = dice_loss + ce_loss
 
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
@@ -151,7 +132,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
-                loss = dice_loss
+                loss = dice_loss + ce_loss
                 loss.backward()
                 optimizer.step()
 
@@ -180,7 +161,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
-                loss = dice_loss
+                loss = dice_loss + ce_loss
                 test_loss_list.append(loss.item())
 
                 # Compute Dice metric for class 1
