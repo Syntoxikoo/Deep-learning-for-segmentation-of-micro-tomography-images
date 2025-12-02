@@ -242,7 +242,7 @@ class TOMODataset(Dataset):
 
         mask = mask.squeeze()
         threshold = threshold_otsu(mask)
-        binary_mask = mask > threshold
+        binary_mask = mask < threshold
 
         cleaned_mask = remove_small_objects(binary_mask, min_size=(8))
 
@@ -260,6 +260,6 @@ TRANSFORM: dict = {
     #     interpolation=v2.InterpolationMode.BILINEAR,
     # ),
     # "Stretch": v2.ElasticTransform(),
-    "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
-    "Color-jitter": v2.ColorJitter(brightness=0.1, contrast=0.1),
+    # "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
+    # "Color-jitter": v2.ColorJitter(brightness=0.1, contrast=0.1),
 }

@@ -42,11 +42,11 @@ source .venv/bin/activate
 echo ""
 echo "=========== training ================="
 
-python -m src.scripts.train_with_baseline \
+python -m src.scripts.train.train_with_baseline \
     --on_cluster True \
     --epochs 100 \
     --learning_rate 1e-5 \
-    --batch_size 10
+    --batch_size 8
 
 EXIT_CODE=$?
 

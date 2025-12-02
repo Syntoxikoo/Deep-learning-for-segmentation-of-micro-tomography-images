@@ -78,7 +78,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
         in_channels=1,
         num_classes=2,
         features=(64, 128, 256, 512),
-        up_method="Ctranspose",
+        up_method="bilinear",
         normalize=True,
         drop_out=0.3,
         batch_size=batch_size,
@@ -157,10 +157,6 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 images = images.to(device, non_blocking=True)
                 labels = labels.to(device, non_blocking=True)
                 weights = weights.to(device, non_blocking=True)
-                print(f"image range: {images.min().item()} - {images.max().item()}")
-                print(f"label unique: {labels.unique()}")
-                print(f"weights range: {weights.min().item()} - {weights.max().item()}")
-                print(f"weights mean: {weights.mean().item()}")
                 out = model(images)
                 ce_loss = ce_loss_fn(out, labels, weights)
                 dice_loss = dice_loss_fn(out, labels)
