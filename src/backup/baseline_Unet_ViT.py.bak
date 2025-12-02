@@ -1,7 +1,7 @@
 # baseline_Unet_ViT.py  (fixed)
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class PrintSize(nn.Module):
@@ -164,11 +164,21 @@ class Convblock(nn.Module):
         padding = 1 if filter_size == 3 else 0
 
         self.conv1 = nn.Conv2d(
-            in_channels, out_channels, filter_size, stride=stride, padding=padding, dilation=dilation
+            in_channels,
+            out_channels,
+            filter_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
         )
         self.bNorm1 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
         self.conv2 = nn.Conv2d(
-            out_channels, out_channels, filter_size, stride=stride, padding=padding, dilation=dilation
+            out_channels,
+            out_channels,
+            filter_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
         )
         self.bNorm2 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
 
@@ -193,9 +203,13 @@ class DecodeBlock(nn.Module):
         upsampling = kwargs.get("upsampling", "nearest")
 
         if up_size > 1:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels, up_size, stride=up_size) \
-                if upsampling == "Ctranspose" \
-                else nn.Upsample(scale_factor=up_size, mode="bilinear", align_corners=False)
+            self.up = (
+                nn.ConvTranspose2d(in_channels, in_channels, up_size, stride=up_size)
+                if upsampling == "Ctranspose"
+                else nn.Upsample(
+                    scale_factor=up_size, mode="bilinear", align_corners=False
+                )
+            )
 
         self.conv_block = Convblock(
             in_channels + out_channels,
@@ -207,7 +221,9 @@ class DecodeBlock(nn.Module):
 
     def forward(self, x, residual):
         x = self.up(x)
-        residual = F.interpolate(residual, size=x.shape[2:], mode="bilinear", align_corners=False)
+        residual = F.interpolate(
+            residual, size=x.shape[2:], mode="bilinear", align_corners=False
+        )
         x = torch.cat([residual, x], dim=1)
         return self.conv_block(x)
 
@@ -266,9 +282,13 @@ class BottleneckViT(nn.Module):
 
         # IMPORTANT: preserve spatial dims via padding
         pad = filter_size // 2
-        self.conv1 = nn.Conv2d(in_channels, bottleneck_channels, filter_size, padding=pad)
+        self.conv1 = nn.Conv2d(
+            in_channels, bottleneck_channels, filter_size, padding=pad
+        )
         self.bn1 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
-        self.conv2 = nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size, padding=pad)
+        self.conv2 = nn.Conv2d(
+            bottleneck_channels, bottleneck_channels, filter_size, padding=pad
+        )
         self.bn2 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
         self.act = nn.ReLU(True)
 
@@ -318,7 +338,7 @@ class U_net_ViT(nn.Module):
         in_channels=1,
         num_classes=1,
         features=(64, 128, 256, 512),
-        bilinear=False,
+        up_method="Ctranspose",
         normalize=True,
         filter_size=3,
         dropout=0.2,
@@ -365,7 +385,7 @@ class U_net_ViT(nn.Module):
                     feat,
                     filter_size=filter_size,
                     normalize=normalize,
-                    upsampling=("Ctranspose" if not bilinear else "bilinear"),
+                    upsampling=up_method,
                     dropout=dropout,
                 )
             )
@@ -408,7 +428,9 @@ class U_net_ViT(nn.Module):
 
             if i < len(self.deep_heads):
                 dp = self.deep_heads[i](x)
-                dp = F.interpolate(dp, size=x.shape[2:], mode="bilinear", align_corners=False)
+                dp = F.interpolate(
+                    dp, size=x.shape[2:], mode="bilinear", align_corners=False
+                )
                 deep_preds.append(dp)
 
         logits = self.outc(x)
@@ -420,6 +442,7 @@ if __name__ == "__main__":
         in_channels=1,
         num_classes=1,
         features=(64, 128, 256, 512),
+        up_method="Ctranspose",
     )
     x = torch.randn(1, 1, 572, 572)
     logits, deep = model(x)

@@ -1,11 +1,11 @@
-#baseline_Unet_ViT.py hybrid U-Net with transformer bottleneck
+# baseline_Unet_ViT.py hybrid U-Net with transformer bottleneck
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 
-class PrintSize(nn.Module): 
+class PrintSize(nn.Module):
     """Utility module to print current shape of a Tensor in Sequential, only at the first pass."""
 
     def __init__(self) -> None:
@@ -17,6 +17,7 @@ class PrintSize(nn.Module):
             print(f"Size: {x.size()}")
             self.first = False
         return x
+
 
 class Convblock(nn.Module):
     def __init__(
@@ -37,13 +38,21 @@ class Convblock(nn.Module):
         padding = 1 if filter_size == 3 else 0
 
         self.conv1 = nn.Conv2d(
-            in_channels, out_channels, filter_size,
-            stride=stride, padding=padding, dilation=dilation
+            in_channels,
+            out_channels,
+            filter_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
         )
         self.bNorm1 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
         self.conv2 = nn.Conv2d(
-            out_channels, out_channels, filter_size,
-            stride=stride, padding=padding, dilation=dilation
+            out_channels,
+            out_channels,
+            filter_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
         )
         self.bNorm2 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
 
@@ -62,7 +71,9 @@ class Convblock(nn.Module):
 
 
 class EncodeBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, residual_channels, pool_size=2, **kwargs):
+    def __init__(
+        self, in_channels, out_channels, residual_channels, pool_size=2, **kwargs
+    ):
         super().__init__()
         self.conv_block = Convblock(in_channels, out_channels, **kwargs)
 
@@ -81,19 +92,25 @@ class DecodeBlock(nn.Module):
 
         upsampling = kwargs.get("upsampling", "bilinear")
 
-        # ✅ FIX 3: Upsample bilinear instead of nearest
         if upsampling == "Ctranspose":
-            self.up = nn.ConvTranspose2d(in_channels, in_channels, up_size, stride=up_size)
+            self.up = nn.ConvTranspose2d(
+                in_channels, in_channels, up_size, stride=up_size
+            )
         else:
-            self.up = nn.Upsample(scale_factor=up_size, mode="bilinear", align_corners=False)
+            self.up = nn.Upsample(
+                scale_factor=up_size, mode="bilinear", align_corners=False
+            )
 
-        self.conv_block = Convblock(in_channels//2 + in_channels, out_channels, **kwargs)
+        self.conv_block = Convblock(
+            in_channels // 2 + in_channels, out_channels, **kwargs
+        )
 
     def forward(self, x, residual):
         x = self.up(x)
 
-        # ✅ FIX 4: interpolate residual to match decoder spatial size
-        residual = F.interpolate(residual, size=x.shape[2:], mode="bilinear", align_corners=False)
+        residual = F.interpolate(
+            residual, size=x.shape[2:], mode="bilinear", align_corners=False
+        )
 
         x = torch.cat([residual, x], dim=1)
         return self.conv_block(x)
@@ -122,7 +139,6 @@ class EncodeBlock(nn.Module):
             )
 
     def forward(self, x):
-
         out = self.conv_block(x)
         pooled = self.pool(out)
         if self.resample is not None:
@@ -171,7 +187,6 @@ class DecodeBlock(nn.Module):
             )
 
     def forward(self, x, residual=None):
-
         upsampled = self.up(x)
         self.p1(upsampled)
         if self.resample is not None:
@@ -210,7 +225,9 @@ class DecodeBlock(nn.Module):
         return out
 
 
-class ViTBottleneck(nn.Module):       # wrapper around PyTorch's nn.TransformerEncoder, operating on flattened (H*W) spatial tokens
+class ViTBottleneck(
+    nn.Module
+):  # wrapper around PyTorch's nn.TransformerEncoder, operating on flattened (H*W) spatial tokens
     """
     ViT-style Transformer bottleneck used inside U_net_ViT.
 
@@ -347,8 +364,11 @@ class BottleneckViT(nn.Module):
 
         return x_up
 
-class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dropout, are new variables, 
-                            # default to small values so behavior matches simple Unet when ViT is shallow
+
+class U_net_ViT(
+    nn.Module
+):  # vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dropout, are new variables,
+    # default to small values so behavior matches simple Unet when ViT is shallow
     def __init__(
         self,
         encode_in: tuple = (1,),
@@ -383,9 +403,9 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
                 - residual (str): "interpolate" or "crop"
         """
         super().__init__()
-        assert len(encode_in) == len(
-            decode_in
-        ), "U-net should have the same number of encode and decode layer"
+        assert len(encode_in) == len(decode_in), (
+            "U-net should have the same number of encode and decode layer"
+        )
 
         normalize: bool = kwargs.get("normalize", False)
         self.N_layers = len(encode_in)
@@ -426,16 +446,20 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
                     **kwargs,
                 )
             )
-        #self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
-        self.segment_conv = nn.Conv2d(decode_out[-1], 1, kernel_size=1)    #change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
-        
-        self.deep_heads = nn.ModuleList([
-            nn.Conv2d(512, 1, 1),
-            nn.Conv2d(256, 1, 1),
-            nn.Conv2d(128, 1, 1),
-            nn.Conv2d(64, 1, 1),
-        ])
-    
+        # self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
+        self.segment_conv = nn.Conv2d(
+            decode_out[-1], 1, kernel_size=1
+        )  # change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
+
+        self.deep_heads = nn.ModuleList(
+            [
+                nn.Conv2d(512, 1, 1),
+                nn.Conv2d(256, 1, 1),
+                nn.Conv2d(128, 1, 1),
+                nn.Conv2d(64, 1, 1),
+            ]
+        )
+
     def forward(self, x):
         residuals: list = []
 
@@ -462,7 +486,9 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
             # grab deep supervision predictions
             if ii < len(self.deep_heads):
                 dp = self.deep_heads[ii](x)
-                dp = F.interpolate(dp, size=x.shape[2:], mode="bilinear", align_corners=False)
+                dp = F.interpolate(
+                    dp, size=x.shape[2:], mode="bilinear", align_corners=False
+                )
                 deep_preds.append(dp)
 
         # Final prediction
@@ -478,7 +504,8 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
 
         return x
 
-if __name__ == "__main__": # dummy test
+
+if __name__ == "__main__":  # dummy test
     model = U_net_ViT()
     x = torch.randn(1, 1, 572, 572)
     x_out = model(x)

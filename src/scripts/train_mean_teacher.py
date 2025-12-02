@@ -1,33 +1,33 @@
 # %%
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add src folder
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(REPO_ROOT / "src"))
 
 import argparse
-import torch
-import os
 import csv
-import numpy as np
+import os
 from datetime import datetime
-from torch.utils.data import DataLoader
-from torch.amp import GradScaler, autocast
-from torch import optim
-from torchvision.transforms import v2
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from torch import optim
+from torch.amp import GradScaler, autocast
+from torch.utils.data import DataLoader
+from torchvision.transforms import v2
+
+from models.mean_teacher_Unet import ConsistencyLoss, MeanTeacherUNet
 from utils import (
-    get_device,
     PairTransform,
     TOMODataset,
     WeightedCrossEntropyLossV2,
+    get_device,
     setup_logger,
 )
 from utils.unlabeled_loader import UnlabeledTomoDataset
-from models.mean_teacher_Unet import MeanTeacherUNet, ConsistencyLoss
-
 
 
 def main(
@@ -43,7 +43,6 @@ def main(
     teacher_ckpt=None,
     checkpoint_both=None,
 ):
-
     # ========== Setup ==========
     path = Path(__file__).resolve().parents[2]
     timestamp = datetime.now().strftime("%d-%Hh%M")
@@ -53,7 +52,9 @@ def main(
     logger = setup_logger(save_dir)
     csv_file = open(os.path.join(save_dir, "metrics.csv"), "w", newline="")
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(["epoch", "sup_loss", "cons_loss", "val_loss", "val_dice", "lambda_w"])
+    csv_writer.writerow(
+        ["epoch", "sup_loss", "cons_loss", "val_loss", "val_dice", "lambda_w"]
+    )
 
     device, dl_workers = get_device()
 
@@ -122,7 +123,7 @@ def main(
     # ----------------------------------------------------------
     # OPTIONAL RESTORE CHECKPOINT(S)
     # ----------------------------------------------------------
-    
+
     if student_ckpt is not None:
         model.load_student(student_ckpt, device=device)
 
@@ -131,8 +132,6 @@ def main(
 
     if checkpoint_both is not None:
         model.load_both(checkpoint_both, device=device)
-
-
 
     sup_loss_fn = WeightedCrossEntropyLossV2()
     cons_loss_fn = ConsistencyLoss(temperature=0.5, conf_thresh=0.6)
@@ -189,7 +188,6 @@ def main(
                 if isinstance(tea_logits_u, tuple):
                     tea_logits_u = tea_logits_u[0]
 
-
             stu_logits_u = model.student(imgs_u)
             if isinstance(stu_logits_l, tuple):
                 stu_logits_l = stu_logits_l[0]
@@ -234,7 +232,7 @@ def main(
 
         # no greek chars -> no UnicodeEncodeError on Windows terminals
         logger.info(
-            f"Epoch {epoch+1}: SUP={avg_sup:.4f} CONS={avg_cons:.4f} "
+            f"Epoch {epoch + 1}: SUP={avg_sup:.4f} CONS={avg_cons:.4f} "
             f"lam_w={lambda_w:.3f} VAL={avg_val:.4f} DICE={avg_dice:.4f}"
         )
 
@@ -243,15 +241,21 @@ def main(
         if avg_val < best_val_loss:
             best_val_loss = avg_val
 
-            torch.save(model.student.state_dict(), os.path.join(save_dir, "best_student.pth"))
-            torch.save(model.teacher.state_dict(), os.path.join(save_dir, "best_teacher.pth"))
+            torch.save(
+                model.student.state_dict(), os.path.join(save_dir, "best_student.pth")
+            )
+            torch.save(
+                model.teacher.state_dict(), os.path.join(save_dir, "best_teacher.pth")
+            )
 
             # NEW: combine both
-            torch.save({
-                "student": model.student.state_dict(),
-                "teacher": model.teacher.state_dict(),
-            }, os.path.join(save_dir, "best_mean_teacher.pth"))
-
+            torch.save(
+                {
+                    "student": model.student.state_dict(),
+                    "teacher": model.teacher.state_dict(),
+                },
+                os.path.join(save_dir, "best_mean_teacher.pth"),
+            )
 
     csv_file.close()
 
@@ -350,7 +354,9 @@ def main(
 
 def _arg_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--on_cluster", type=lambda x: x.lower() in ["true", "1", "yes"], default=False)
+    parser.add_argument(
+        "--on_cluster", type=lambda x: x.lower() in ["true", "1", "yes"], default=False
+    )
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
@@ -360,7 +366,7 @@ def _arg_parse():
     parser.add_argument("--lambda_u", type=float, default=0.5)
     parser.add_argument("--student_ckpt", type=str, default=None)
     parser.add_argument("--teacher_ckpt", type=str, default=None)
-    parser.add_argument("--checkpoint_both", type=str, default=None) 
+    parser.add_argument("--checkpoint_both", type=str, default=None)
     # .pth file containing {"student":state_dict, "teacher":state_dict}
 
     return parser.parse_known_args()[0]

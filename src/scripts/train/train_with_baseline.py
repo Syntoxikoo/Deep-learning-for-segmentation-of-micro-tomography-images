@@ -12,12 +12,13 @@ from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
-from ..models import UNet
-from ..utils import (
+from ...models.baseline_Unet import UNet
+from ...utils import (
     DiceLoss,
+    DiceMetric,
     PairTransform,
     TOMODataset,
-    WeightedCrossEntropyLossV2,
+    WeightCELoss,
     get_device,
     init_weights,
     plot_losses_curves,
@@ -29,7 +30,7 @@ from ..utils import (
 def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir=None):
     # Setup directories
 
-    path = Path(__file__).resolve().parents[2]
+    path = Path(__file__).resolve().parents[3]
     timestamp = datetime.now().strftime("%d-%Hh%M")
     save_dir = os.path.join(path, "checkpoints", f"run_{timestamp}")
     os.makedirs(save_dir, exist_ok=True)
@@ -96,7 +97,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
         in_channels=1,
         num_classes=2,
         features=(64, 128, 256, 512),
-        bilinear=False,
+        up_method="Ctranspose",
         normalize=True,
         drop_out=0.3,
         batch_size=batch_size,
@@ -105,8 +106,9 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
     model.to(device)
 
     # Training Params
-    ce_loss_fn = WeightedCrossEntropyLossV2()
+    ce_loss_fn = WeightCELoss()
     dice_loss_fn = DiceLoss()
+    dice_metric = DiceMetric()
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -114,7 +116,9 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
     )
     if on_cluster:
         scaler = GradScaler()
-
+    train_loss_list = []
+    val_loss_list = []
+    val_dice_list = []
     best_test_loss = float("inf")
     # Training
     for epoch in range(epochs):
@@ -160,6 +164,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 )
 
         avg_train_loss = np.mean(epoch_losses)
+        train_loss_list.append(avg_train_loss)
 
         # Validation Step
         model.eval()
@@ -178,16 +183,14 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 loss = dice_loss
                 test_loss_list.append(loss.item())
 
-                prediction = torch.argmax(out, dim=1)
-
-                # Calculating Dice for Class 1
-                intersection = ((prediction == 1) & (labels == 1)).sum()
-                union = (prediction == 1).sum() + (labels == 1).sum()
-                dice = (2 * intersection) / (union + 1e-8)
-                dice_scores.append(dice.item())
+                # Compute Dice metric for class 1
+                dice = dice_metric(out, labels)
+                dice_scores.append(dice)
 
         avg_test_loss = np.mean(test_loss_list)
         avg_dice = np.mean(dice_scores)
+        val_loss_list.append(avg_test_loss)
+        val_dice_list.append(avg_dice)
         scheduler.step(avg_test_loss)
 
         logger.info(f"=== Epoch {epoch + 1}/{epochs} Result ===")
@@ -224,7 +227,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
             )
             logger.info(f"New best model saved (Loss: {best_test_loss:.4f})")
 
-    plot_losses_curves(avg_train_loss, avg_test_loss, save_dir, show=False)
+    plot_losses_curves(train_loss_list, val_loss_list, save_dir, show=False)
     csv_file.close()
 
 

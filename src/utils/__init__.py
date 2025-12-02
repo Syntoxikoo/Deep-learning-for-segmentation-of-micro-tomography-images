@@ -1,4 +1,4 @@
-from .custom_loss import DiceLoss, WeightedCrossEntropyLoss, WeightedCrossEntropyLossV2
+from .custom_loss import DiceLoss, DiceMetric, WeightCELoss, WeightedCrossEntropyLoss
 from .dataset_loader import TRANSFORM, TOMODataset, UnetDataset
 from .plot_func import plot_data_transform, plot_losses_curves, plot_prediction
 from .tools import (
@@ -12,8 +12,9 @@ from .weights_map_unet_paper import compute_weight_map, compute_weight_mapV2
 
 __all__ = [
     "DiceLoss",
+    "DiceMetric",
     "WeightedCrossEntropyLoss",
-    "WeightedCrossEntropyLossV2",
+    "WeightCELoss",
     "TRANSFORM",
     "UnetDataset",
     "TOMODataset",

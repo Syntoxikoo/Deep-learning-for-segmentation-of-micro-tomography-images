@@ -147,7 +147,6 @@ class TOMODataset(Dataset):
         if self.transform:
             image, label = self.transform(image, label)
 
-        label = self.binarize_mask(label, 1)
         weight_map = self.weights_masks(label.numpy())
         return image, label.squeeze(0).long(), weight_map
 
@@ -165,7 +164,7 @@ class TOMODataset(Dataset):
 
     def weights_masks(self, mask, w0=5, sigma=2):
         """mitigate class imbalance for binary set"""
-        mask = mask.squeeze(0)
+        mask = mask.squeeze()
         total_pixels = mask.size
         c1_count = np.count_nonzero(mask)
         c0_count = total_pixels - c1_count
