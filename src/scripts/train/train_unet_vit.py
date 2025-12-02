@@ -10,6 +10,7 @@ from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
+from ...models.Unet_ViT import UNetViT
 from ...utils import (
     TRANSFORM,
     DiceLoss,
@@ -23,8 +24,6 @@ from ...utils import (
     setup_logger,
 )
 
-from ...models.Unet_ViT import UNetViT
-
 torch.cuda.empty_cache()
 
 # Argument parser
@@ -37,7 +36,7 @@ parser.add_argument("--epochs", type=int, default=50)
 parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--batch_size", type=int, default=2)
 parser.add_argument("--save_dir", type=str, default="checkpoints")
-parser.add_argument("--input_size", type=int, default=388)
+parser.add_argument("--input_size", type=int, default=None)
 parser.add_argument("--vit_num_layers", type=int, default=2)
 parser.add_argument("--vit_num_heads", type=int, default=4)
 parser.add_argument("--max_tokens", type=int, default=2048)
@@ -52,12 +51,13 @@ csv_file = open(csv_path, "w", newline="")
 csv_writer = csv.writer(csv_file)
 csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_dice", "learning_rate"])
 # ============ LOAD DATASETS ============
+resize = [args.input_size, args.input_size] if args.input_size else None
 transform = v2.Compose(list(TRANSFORM.values()))
 train_ds = TOMODataset(
     img_dir=args.img_data_path,
     label_dir=args.mask_data_path,
     split="train",
-    resized_shape=[args.input_size, args.input_size],
+    resized_shape=resize,
     transform=transform,
 )
 
@@ -65,7 +65,7 @@ val_ds = TOMODataset(
     img_dir=args.img_data_path,
     label_dir=args.mask_data_path,
     split="test",
-    resized_shape=[args.input_size, args.input_size],
+    resized_shape=resize,
     transform=None,
 )
 
