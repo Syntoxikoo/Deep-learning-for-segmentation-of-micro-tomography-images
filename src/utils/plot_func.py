@@ -31,9 +31,9 @@ def plot_losses_curves(train_losses, val_losses, save_dir, show=False):
 
 def plot_prediction(image, label, pred, save_dir, epoch=None, show=False):
     # Ensure format
-    image = image.cpu().numpy()
-    label = label.cpu().numpy()
-    pred = pred.cpu().numpy()
+    image = image.squeeze().cpu().numpy()
+    label = label.squeeze().cpu().numpy()
+    pred = pred.squeeze().cpu().numpy()
 
     kwargs = {
         "fontsize": 12,

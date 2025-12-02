@@ -148,7 +148,7 @@ class UNet(nn.Module):
         in_channels: input image channels (e.g. 1 for grayscale)
         num_classes: output channels (for CrossEntropyLoss use number of classes, e.g. 2)
         features: list of feature sizes at each level, e.g. [64,128,256,512]
-        bilinear: if True uses bilinear upsampling + conv, otherwise ConvTranspose2d
+        up_method: upsampling method - "Ctranspose" for ConvTranspose2d or "bilinear" for bilinear interpolation
         normalize: whether to use BatchNorm
         filter_size: kernel size for convs (3 recommended)
         dropout: dropout rate for regularization
@@ -161,7 +161,7 @@ class UNet(nn.Module):
         in_channels=1,
         num_classes=2,
         features=(64, 128, 256, 512),
-        bilinear=False,
+        up_method="Ctranspose",
         normalize=True,
         filter_size=3,
         dropout=0.0,
@@ -171,7 +171,7 @@ class UNet(nn.Module):
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.features = list(features)
-        self.bilinear = bilinear
+        self.up_method = up_method
         self.normalize = normalize
         self.filter_size = filter_size
         batch_norm = kwargs.get("batchsize", 8) >= 8
@@ -220,7 +220,7 @@ class UNet(nn.Module):
                     feat,
                     filter_size=filter_size,
                     normalize=normalize,
-                    upsampling=("Ctranspose" if not bilinear else "bilinear"),
+                    upsampling=up_method,
                     dropout=dropout,
                     **kwargs,
                 )
@@ -280,7 +280,7 @@ if __name__ == "__main__":
         in_channels=1,
         num_classes=2,
         features=(64, 128, 256, 512),
-        bilinear=False,
+        up_method="Ctranspose",
         normalize=True,
     )
     model.apply(init_weights)
