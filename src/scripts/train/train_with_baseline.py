@@ -30,7 +30,7 @@ from ...utils import (
 def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir=None):
     # Setup directories
 
-    path = Path(__file__).resolve().parents[2]
+    path = Path(__file__).resolve().parents[3]
     timestamp = datetime.now().strftime("%d-%Hh%M")
     save_dir = os.path.join(path, "checkpoints", f"run_{timestamp}")
     os.makedirs(save_dir, exist_ok=True)
@@ -116,7 +116,9 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
     )
     if on_cluster:
         scaler = GradScaler()
-
+    train_loss_list = []
+    val_loss_list = []
+    val_dice_list = []
     best_test_loss = float("inf")
     # Training
     for epoch in range(epochs):
@@ -162,6 +164,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 )
 
         avg_train_loss = np.mean(epoch_losses)
+        train_loss_list.append(avg_train_loss)
 
         # Validation Step
         model.eval()
@@ -186,6 +189,8 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
 
         avg_test_loss = np.mean(test_loss_list)
         avg_dice = np.mean(dice_scores)
+        val_loss_list.append(avg_test_loss)
+        val_dice_list.append(avg_dice)
         scheduler.step(avg_test_loss)
 
         logger.info(f"=== Epoch {epoch + 1}/{epochs} Result ===")
@@ -222,7 +227,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
             )
             logger.info(f"New best model saved (Loss: {best_test_loss:.4f})")
 
-    plot_losses_curves(avg_train_loss, avg_test_loss, save_dir, show=False)
+    plot_losses_curves(train_loss_list, val_loss_list, save_dir, show=False)
     csv_file.close()
 
 
