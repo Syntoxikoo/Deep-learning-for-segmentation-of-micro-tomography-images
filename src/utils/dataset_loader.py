@@ -147,6 +147,7 @@ class TOMODataset(Dataset):
         if self.transform:
             image, label = self.transform(image, label)
 
+        label = self.binarize_mask(label, 1)
         weight_map = self.weights_masks(label.numpy())
         return image, label.squeeze(0).long(), weight_map
 
