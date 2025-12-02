@@ -253,13 +253,13 @@ TRANSFORM: dict = {
     "rotation": v2.RandomRotation([-20, 20]),
     "V-flip": v2.RandomVerticalFlip(p=0.5),
     "H-flip": v2.RandomHorizontalFlip(p=0.5),
-    "Affine": v2.RandomAffine(
-        degrees=[-180, 180],
-        translate=(0.1, 0.1),
-        scale=(0.8, 1.2),
-        interpolation=v2.InterpolationMode.BILINEAR,
-    ),
-    "Stretch": v2.ElasticTransform(),
+    # "Affine": v2.RandomAffine(
+    #     degrees=[-180, 180],
+    #     translate=(0.1, 0.1),
+    #     scale=(0.8, 1.2),
+    #     interpolation=v2.InterpolationMode.BILINEAR,
+    # ),
+    # "Stretch": v2.ElasticTransform(),
     "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
-    "Color-jitter": v2.ColorJitter(brightness=0.2, contrast=0.2),
+    "Color-jitter": v2.ColorJitter(brightness=0.1, contrast=0.1),
 }
