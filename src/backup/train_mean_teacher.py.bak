@@ -21,13 +21,11 @@ from torchvision.transforms import v2
 
 from models.mean_teacher_Unet import ConsistencyLoss, MeanTeacherUNet
 from utils import (
-    PairTransform,
     TOMODataset,
-    WeightedCrossEntropyLossV2,
+    WeightCELoss,
     get_device,
     setup_logger,
 )
-from utils.unlabeled_loader import UnlabeledTomoDataset
 
 
 def main(
@@ -74,7 +72,6 @@ def main(
             v2.ColorJitter(brightness=0.2, contrast=0.2),
         ]
     )
-    pair_transform = PairTransform(transform)
 
     # ========== Paths ==========
     if data_dir is None:
@@ -105,8 +102,12 @@ def main(
 
     # unlabeled set gets *same* image preprocessing (normalize + resize),
     # the only difference is that there is no mask / Otsu step.
-    unl_dataset = UnlabeledTomoDataset(
+    # Use TOMODataset with label_dir=None for unlabeled data
+    unl_dataset = TOMODataset(
         unlabeled_dir,
+        label_dir=None,  # No labels for unlabeled data
+        split="train",
+        train_ratio=1.0,  # Use all unlabeled data
         resized_shape=resized_shape,
     )
 
@@ -133,7 +134,7 @@ def main(
     if checkpoint_both is not None:
         model.load_both(checkpoint_both, device=device)
 
-    sup_loss_fn = WeightedCrossEntropyLossV2()
+    sup_loss_fn = WeightCELoss()
     cons_loss_fn = ConsistencyLoss(temperature=0.5, conf_thresh=0.6)
 
     optimizer = optim.AdamW(model.student.parameters(), lr=learning_rate)
@@ -160,12 +161,12 @@ def main(
         lambda_w = float(lambda_u) * min(1.0, (epoch + 1) / warmup_epochs)
 
         for imgs_l, labels_l, weights_l in train_loader:
-            # Get unlabeled batch
+            # Get unlabeled batch (TOMODataset with label_dir=None returns just image)
             try:
-                imgs_u, _ = next(unl_iter)
+                imgs_u = next(unl_iter)
             except StopIteration:
                 unl_iter = iter(unl_loader)
-                imgs_u, _ = next(unl_iter)
+                imgs_u = next(unl_iter)
 
             imgs_l = imgs_l.to(device)
             labels_l = labels_l.to(device)
@@ -189,8 +190,8 @@ def main(
                     tea_logits_u = tea_logits_u[0]
 
             stu_logits_u = model.student(imgs_u)
-            if isinstance(stu_logits_l, tuple):
-                stu_logits_l = stu_logits_l[0]
+            if isinstance(stu_logits_u, tuple):
+                stu_logits_u = stu_logits_u[0]
 
             loss_cons = cons_loss_fn(stu_logits_u, tea_logits_u)
             loss_u = lambda_w * loss_cons

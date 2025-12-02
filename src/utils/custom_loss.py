@@ -2,18 +2,42 @@ import torch
 from torch import nn
 
 
-class WeightedCrossEntropyLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.softmax = nn.Softmax(dim=1)
+class ConsistencyLoss(nn.Module):
+    """
+    Consistency loss with:
+      - softmax on logits,
+      - temperature-based sharpening of teacher probabilities,
+      - confidence mask: we only enforce consistency where
+    """
 
-    def forward(self, logits, targets, weights):
-        probs = self.softmax(logits)
-        log_probs = torch.log(probs + 1e-10)
-        loss = -weights.unsqueeze(1) * log_probs.gather(
-            1, targets.unsqueeze(1)
-        ).squeeze(1)
-        return loss.mean()
+    def __init__(self, temperature: float = 0.5, conf_thresh: float = 0.6):
+        super().__init__()
+        self.temperature = temperature
+        self.conf_thresh = conf_thresh
+        self.mse = nn.MSELoss(reduction="none")
+
+    def forward(self, student_logits, teacher_logits):
+        s = torch.softmax(student_logits, dim=1)
+
+        with torch.no_grad():
+            t = torch.softmax(teacher_logits / self.temperature, dim=1)
+
+            # Get probability of the predicted class
+            max_prob, _ = t.max(dim=1, keepdim=True)
+            mask = (max_prob >= self.conf_thresh).float()
+
+        # 3. Calculate MSE
+        loss_map = self.mse(s, t).mean(dim=1, keepdim=True)
+
+        # 4. Masked Average
+        mask_sum = mask.sum()
+
+        if mask_sum < 1e-6:
+            return torch.tensor(0.0, device=student_logits.device, requires_grad=True)
+
+        # Only average over pixels that crossed the threshold
+        loss = (loss_map * mask).sum() / mask_sum
+        return loss
 
 
 class WeightCELoss(nn.Module):

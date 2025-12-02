@@ -16,7 +16,6 @@ from ...models.baseline_Unet import UNet
 from ...utils import (
     DiceLoss,
     DiceMetric,
-    PairTransform,
     TOMODataset,
     WeightCELoss,
     get_device,
@@ -63,7 +62,6 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
             v2.ColorJitter(brightness=0.2, contrast=0.2),
         ]
     )
-    pair_transform = PairTransform(transform)
 
     # Load data
     if data_dir:

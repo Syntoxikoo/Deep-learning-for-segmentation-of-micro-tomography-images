@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 
 def plot_losses_curves(train_losses, val_losses, save_dir, show=False):
@@ -124,3 +125,54 @@ def plot_data_transform(
     if show:
         plt.show()
     plt.close()
+
+
+def visualize_student_vs_teacher(model, unlabeled_loader, device, save_dir):
+    """
+    Visualizes how the Student and Teacher differ on UNLABELED data.
+    """
+    model.eval()
+    model.student.eval()
+    model.teacher.eval()
+
+    iterator = iter(unlabeled_loader)
+
+    for i in range(3):
+        try:
+            images_u = next(iterator)
+        except StopIteration:
+            break
+
+        images_u = images_u.to(device)
+
+        with torch.no_grad():
+            stu_logits, _ = model.student(images_u)
+            tea_logits, _ = model.teacher(images_u)
+
+            # Get predictions (argmax)
+            stu_pred = torch.argmax(stu_logits, dim=1)[0].cpu().numpy()
+            tea_pred = torch.argmax(tea_logits, dim=1)[0].cpu().numpy()
+            img_np = images_u[0, 0].cpu().numpy()
+
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+        axes[0].imshow(img_np, cmap="gray")
+        axes[0].set_title("Unlabeled Input")
+
+        axes[1].imshow(stu_pred, cmap="gray")
+        axes[1].set_title("Student Prediction")
+
+        axes[2].imshow(tea_pred, cmap="gray")
+        axes[2].set_title("Teacher Prediction")
+
+        for ax in axes:
+            ax.axis("off")
+
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(save_dir, f"vis_unlabeled_example_{i}.svg"),
+            dpi=600,
+            format="svg",
+            bbox_inches="tight",
+        )
+        plt.close()

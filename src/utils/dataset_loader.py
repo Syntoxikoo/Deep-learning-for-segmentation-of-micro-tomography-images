@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import numpy as np
 import tifffile
@@ -20,8 +21,8 @@ class UnetDataset(Dataset):
         path,
         split: str,
         transform=None,
-        padding: Optional[int] = None,
-        resized_shape: Optional[List[int]] = None,
+        padding: list[int] | None = None,
+        resized_shape: list | None = None,
     ):
         self.img_dir = os.path.join(path, split, "imgs")
         self.label_dir = os.path.join(path, split, "labels")
@@ -79,7 +80,7 @@ class TOMODataset(Dataset):
     def __init__(
         self,
         img_dir,
-        label_dir,
+        label_dir: Path | str | None = None,
         transform=None,
         resized_shape=None,
         split="train",
@@ -87,17 +88,12 @@ class TOMODataset(Dataset):
         seed=42,
     ):
         self.img_dir = img_dir
-        self.label_dir = label_dir
         self.transform = transform
         self.resized_shape = resized_shape
         self.split = split
         self.train_ratio = train_ratio
 
         self.imgs_names = sorted(os.listdir(img_dir))
-        self.labels_names = sorted(os.listdir(label_dir))
-        assert len(self.imgs_names) == len(self.labels_names), (
-            "Mismatch in number of images and labels"
-        )
 
         total_samples = len(self.imgs_names)
         train_size = int(self.train_ratio * total_samples)
@@ -113,42 +109,63 @@ class TOMODataset(Dataset):
         else:
             raise ValueError("split must be 'train' or 'test'")
 
+        self.label_dir = label_dir
+        if label_dir is not None:
+            self.labels_names = sorted(os.listdir(label_dir))
+            assert len(self.imgs_names) == len(self.labels_names), (
+                "Mismatch in number of images and labels"
+            )
+
     def __len__(self):
         return len(self.indices)
 
     def __getitem__(self, idx):
         sample_idx = self.indices[idx]
-        image, label = self.load_pair(sample_idx)
+        if self.label_dir is None:
+            image = self.load_image(sample_idx)
+        else:
+            image, label = self.load_pair(sample_idx)
 
         image = self.normalize(image)
-
         image = torch.from_numpy(image).float()
-        label = torch.from_numpy(label).float()
 
         if image.ndim == 2:
             image = image.unsqueeze(0)
         elif image.ndim == 3:
             image = image.permute(2, 0, 1)
-
-        if label.ndim == 2:
-            label = label.unsqueeze(0)
-        elif label.ndim == 3:
-            label = label.permute(2, 0, 1)
-
         if self.resized_shape:
             image = v2.functional.resize(image, self.resized_shape)
-            label = v2.functional.resize(
-                label, self.resized_shape, v2.functional.InterpolationMode.NEAREST
-            )
 
-        label = self.binarize_mask(label, 2)
-        label = tv_tensors.Mask(label)
+        if self.label_dir is not None:
+            label = torch.from_numpy(label).float()
+            if label.ndim == 2:
+                label = label.unsqueeze(0)
+            elif label.ndim == 3:
+                label = label.permute(2, 0, 1)
+
+            if self.resized_shape:
+                label = v2.functional.resize(
+                    label, self.resized_shape, v2.functional.InterpolationMode.NEAREST
+                )
+
+            label = self.binarize_mask(label, 2)
+            label = tv_tensors.Mask(label)
 
         if self.transform:
-            image, label = self.transform(image, label)
+            if self.label_dir is None:
+                image = self.transform(image)
+                return image
+            else:
+                image, label = self.transform(image, label)
+                weight_map = self.weights_masks(label.numpy())
+                return image, label.squeeze(0).long(), weight_map
 
-        weight_map = self.weights_masks(label.numpy())
-        return image, label.squeeze(0).long(), weight_map
+        # No transform case
+        if self.label_dir is None:
+            return image
+        else:
+            weight_map = self.weights_masks(label.numpy())
+            return image, label.squeeze(0).long(), weight_map
 
     def load_pair(self, idx):
         img_name = self.imgs_names[idx]
@@ -161,6 +178,12 @@ class TOMODataset(Dataset):
         label = tifffile.imread(label_path)
 
         return image, label
+
+    def load_image(self, idx):
+        img_name = self.imgs_names[idx]
+        img_path = os.path.join(self.img_dir, img_name)
+        image = tifffile.imread(img_path)
+        return image
 
     def weights_masks(self, mask, w0=5, sigma=2):
         """mitigate class imbalance for binary set"""
