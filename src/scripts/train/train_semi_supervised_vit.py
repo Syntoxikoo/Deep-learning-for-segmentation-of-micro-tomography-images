@@ -30,6 +30,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 from src.models.mean_teacher_Unet import MeanTeacherUNet
 from src.utils import (
     TRANSFORM,
+    SIMPLE_TRANSFORM,
     AddGaussianNoise,
     ConsistencyLoss,
     DiceLoss,

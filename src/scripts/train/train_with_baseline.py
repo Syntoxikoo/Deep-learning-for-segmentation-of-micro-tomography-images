@@ -15,6 +15,7 @@ from torchvision.transforms import v2
 from ...models.baseline_Unet import UNet
 from ...utils import (
     TRANSFORM,
+    SIMPLE_TRANSFORM,
     DiceLoss,
     DiceMetric,
     TOMODataset,
@@ -27,7 +28,7 @@ from ...utils import (
 )
 
 
-def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir=None):
+def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir=None, loss_choice:str = "both"):
     # Setup directories
 
     path = Path(__file__).resolve().parents[3]
@@ -44,7 +45,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
 
     device, dl_workers = get_device()
     # Transforms
-    transform = v2.Compose(list(TRANSFORM.values()))
+    transform = v2.Compose(list(SIMPLE_TRANSFORM.values()))
 
     # Load data
     if data_dir:
@@ -80,7 +81,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
         features=(64, 128, 256, 512),
         up_method="Ctranspose",
         normalize=True,
-        drop_out=0.3,
+        drop_out=0.2,
         batch_size=batch_size,
     )
     model.apply(init_weights)
@@ -89,8 +90,16 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
     # Training Params
     ce_loss_fn = WeightCELoss()
     dice_loss_fn = DiceLoss()
+    def combined_loss(out,labels,weights)
+        return ce_loss_fn(out, labels, weights) + dice_loss_fn(out, labels)
+    if loss_choice == "both":
+        loss_fn = combined_loss
+    elif loss_choice == "dice":
+        loss_fn = dice_loss_fn
+    else:
+        loss_fn = ce_loss_fn 
+    
     dice_metric = DiceMetric()
-
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2
@@ -117,10 +126,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
             if on_cluster:
                 with autocast(device_type="cuda"):
                     out = model(images)
-                    ce_loss = ce_loss_fn(out, labels, weights)
-                    dice_loss = dice_loss_fn(out, labels)
-                    loss = dice_loss + ce_loss
-
+                    loss = loss_fn(out,labels,weights) 
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -130,9 +136,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
 
             else:
                 out = model(images)
-                ce_loss = ce_loss_fn(out, labels, weights)
-                dice_loss = dice_loss_fn(out, labels)
-                loss = dice_loss + ce_loss
+                loss = loss_fn(out,labels,weights) 
                 loss.backward()
                 optimizer.step()
 
@@ -158,9 +162,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
                 labels = labels.to(device, non_blocking=True)
                 weights = weights.to(device, non_blocking=True)
                 out = model(images)
-                ce_loss = ce_loss_fn(out, labels, weights)
-                dice_loss = dice_loss_fn(out, labels)
-                loss = dice_loss + ce_loss
+                loss = loss_fn(out,labels,weights) 
                 test_loss_list.append(loss.item())
 
                 # Compute Dice metric for class 1
@@ -234,6 +236,7 @@ def _arg_parse():
         default=1e-4,
     )
     parser.add_argument("--data_dir", type=str, default=None)
+    parser.add_argument("--loss", type=str, default="both")
     return parser.parse_args()
 
 
@@ -245,4 +248,5 @@ if __name__ == "__main__":
         epochs=args.epochs,
         learning_rate=args.learning_rate,
         data_dir=args.data_dir,
+        loss_choice= args.loss,
     )

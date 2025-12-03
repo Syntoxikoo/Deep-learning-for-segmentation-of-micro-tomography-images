@@ -1,6 +1,6 @@
 #!/bin/bash
-#BSUB -J TOMO_train
-#BSUB -q gpua40
+#BSUB -J TOMO_DICE
+#BSUB -q gpua100
 #BSUB -n 4
 #BSUB -R "rusage[mem=8GB]"
 #BSUB -R "span[hosts=1]"

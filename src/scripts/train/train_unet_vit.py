@@ -13,6 +13,7 @@ from torchvision.transforms import v2
 from ...models.Unet_ViT import UNetViT
 from ...utils import (
     TRANSFORM,
+    SIMPLE_TRANSFORM,
     DiceLoss,
     DiceMetric,
     TOMODataset,
@@ -52,7 +53,7 @@ csv_writer = csv.writer(csv_file)
 csv_writer.writerow(["epoch", "train_loss", "val_loss", "val_dice", "learning_rate"])
 # ============ LOAD DATASETS ============
 resize = [args.input_size, args.input_size] if args.input_size else None
-transform = v2.Compose(list(TRANSFORM.values()))
+transform = v2.Compose(list(SIMPLE_TRANSFORM.values()))
 train_ds = TOMODataset(
     img_dir=args.img_data_path,
     label_dir=args.mask_data_path,
