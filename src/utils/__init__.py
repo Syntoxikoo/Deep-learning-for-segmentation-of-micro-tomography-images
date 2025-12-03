@@ -24,6 +24,8 @@ __all__ = [
     "SIMPLE_TRANSFORM",
     "UnetDataset",
     "TOMODataset",
+    "TOMODatasetViT"
+    "UnetDatasetViT",
     "plot_losses_curves",
     "plot_prediction",
     "plot_data_transform",

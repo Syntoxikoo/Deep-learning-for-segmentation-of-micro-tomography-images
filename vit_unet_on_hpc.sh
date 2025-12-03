@@ -5,43 +5,100 @@
 #BSUB -R "rusage[mem=32GB]"
 #BSUB -R "span[hosts=1]"
 #BSUB -gpu "num=1:mode=exclusive_process"
-#BSUB -W 3:00
-#BSUB -o logs/train_%J.out
-#BSUB -e logs/train_%J.err
-#BSUB -N
 
-echo "=================================="
-echo "Job ID: $LSB_JOBID"
-echo "Host: $(hostname)"
-echo "Date: $(date)"
-echo "=================================="
+# Job name
+#BSUB -J UnetViTTrain
 
-rm -rf .venv
-rm -rf .uv_cache
-# Load module
-module purge
-module load python3/3.11.9
-module load cuda/12.1
-module load ffmpeg
+# Number of CPU cores
+#BSUB -n 4
 
-mkdir -p logs
+# Keep job on a single node
+#BSUB -R "span[hosts=1]"
 
+# Request sufficient RAM (increase if needed)
+#BSUB -R "rusage[mem=20GB]"
 
-# Set environment variables
-SYSTEM_PYTHON=$(which python3)
-export CUDA_VISIBLE_DEVICES=0
-export OMP_NUM_THREADS=$LSB_DJOB_NUMPROC
-export MKL_NUM_THREADS=$LSB_DJOB_NUMPROC
+# Wall time (hh:mm)
+#BSUB -W 08:00
+
+# Absolute paths for log files
+#BSUB -o /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.out
+#BSUB -e /zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs/unetvit_train_%J.err
 
 
-echo "Syncing environment..."
-uv venv .venv --python "$SYSTEM_PYTHON"
-uv sync --python .venv/bin/python
+# ------------------------------
+# Script starts
+# ------------------------------
 
-source .venv/bin/activate
-echo ""
-echo "=========== training ================="
+set -e
 
+# ------------------------------
+# Configuration
+# ------------------------------
+IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
+MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
+SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
+LOG_DIR = "/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs"
+
+EPOCHS=100
+LR=1e-4
+BATCH_SIZE=1  # can reduce to 2 or 1 if OOM persists
+
+# Set PyTorch environment variable to reduce fragmentation
+export PYTORCH_CUDA_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_mb:128"
+export PYTHONPATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/src:$PYTHONPATH"
+
+echo "Starting training script..."
+echo "IMG_DATA_PATH: $IMG_DATA_PATH"
+echo "MASK_DATA_PATH: $MASK_DATA_PATH"
+echo "SAVE_DIR: $SAVE_DIR"
+echo "EPOCHS: $EPOCHS"
+echo "LR: $LR"
+echo "BATCH_SIZE: $BATCH_SIZE"
+
+# ------------------------------
+# Activate Python virtual environment
+# ------------------------------
+if [ -f ~/DL/Deep-learning-for-segmentation-of-micro-tomography-images/venv/bin/activate ]; then
+    echo "Activating virtual environment..."
+    source ~/DL/Deep-learning-for-segmentation-of-micro-tomography-images/venv/bin/activate
+else
+    echo "ERROR: Virtual environment not found!"
+    exit 1
+fi
+
+# ------------------------------
+# Prepare save directory
+# ------------------------------
+mkdir -p "$SAVE_DIR"
+echo "Save directory created/checked: $SAVE_DIR"
+
+mkdir -p "$LOG_DIR"
+echo "Save directory created/checked: $LOG_DIR"
+
+
+# ------------------------------
+# Clean any leftover GPU memory from previous jobs
+# ------------------------------
+echo "Clearing CUDA cache..."
+python3 - <<EOF
+import torch
+torch.cuda.empty_cache()
+EOF
+
+# ------------------------------
+# Run training
+# ------------------------------
+echo "Executing Python training script..."
+python3 src/scripts/train/train_unet_vit.py \
+    --img_data_path "$IMG_DATA_PATH" \
+    --mask_data_path "$MASK_DATA_PATH" \
+    --epochs "$EPOCHS" \
+    --lr "$LR" \
+    --batch_size "$BATCH_SIZE" \
+    --save_dir "$SAVE_DIR"
+
+<<<<<<< HEAD:vit_unet_on_hpc.sh
 python -m src.scripts.train.train_unet_vit \
     --epochs 100 \
     --batch_size 8\
@@ -50,10 +107,7 @@ python -m src.scripts.train.train_unet_vit \
     --vit_num_heads 8  \
     --max_tokens 4096 \
     --input_size 512 \
+=======
+echo "Training script finished successfully."
+>>>>>>> b7c7a42a82b0537704da2a4ea51a2acef095603d:hpc_sh/vit_unet_on_hpc.sh
 
-EXIT_CODE=$?
-
-
-
-echo "Job finished with exit code: $EXIT_CODE"
-exit $EXIT_CODE
