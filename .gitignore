@@ -17,6 +17,8 @@ share/python-wheels/
 .installed.cfg
 MANIFEST
 *.pth
+*.tif
+*.png
 
 pip-log.txt
 pip-delete-this-directory.txt
