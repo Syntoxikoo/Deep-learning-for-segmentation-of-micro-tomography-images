@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import List, Optional, Union
 
 import cv2
 import numpy as np
@@ -12,7 +13,6 @@ from torch.utils.data import Dataset
 from torchvision import tv_tensors
 from torchvision.io import decode_png
 from torchvision.transforms import v2
-from typing import Optional, List, Union
 
 from .tools import AddGaussianNoise
 from .weights_map_unet_paper import compute_weight_map
@@ -225,7 +225,6 @@ class TOMODataset(Dataset):
 
         return torch.tensor(weight_map, dtype=torch.float32)
 
-    
     def normalize(self, arr, mode: Optional[str] = None):
         """
         Centers the dynamic range on the actual material, discard artifacts.
@@ -254,6 +253,54 @@ class TOMODataset(Dataset):
         cleaned_mask = remove_small_objects(binary_mask, min_size=(8))
 
         return torch.tensor(cleaned_mask, dtype=torch.float32).unsqueeze(0)
+
+    def preprocess_tomo_image(image_tensor):
+        """
+        Input: PyTorch Tensor or Numpy Array [H, W] or [1, H, W]
+        Output: Processed Tensor [1, H, W] normalized 0-1
+        """
+        # 1. Convert to Numpy uint8 for OpenCV processing
+        #    (Assuming input is 0-1 float or large int)
+        img = np.array(image_tensor).squeeze()
+
+        # Normalize to 0-255 uint8 range for OpenCV algorithms
+        img = (img - img.min()) / (img.max() - img.min())
+        img_uint8 = (img * 255).astype(np.uint8)
+
+        # --- STEP 1: Denoise (Bilateral Filter) ---
+        # d=9: Diameter of pixel neighborhood
+        # sigmaColor=75: Filter sigma in the color space (mix colors closer in intensity)
+        # sigmaSpace=75: Filter sigma in the coordinate space (pixels closer in space)
+        # Result: Smooths 'salt and pepper' noise but keeps edges of blobs sharp.
+        denoised = cv2.bilateralFilter(img_uint8, d=9, sigmaColor=75, sigmaSpace=75)
+
+        # --- STEP 2: Flatten Shadows (Pseudo Flat-Field) ---
+        # We create a "background map" by blurring the image heavily.
+        # The kernel size (51,51) must be larger than your objects.
+        background = cv2.GaussianBlur(denoised, (51, 51), 0)
+
+        # Avoid division by zero
+        background[background == 0] = 1
+
+        # Divide original by background.
+        # This cancels out lighting variations (shadows).
+        # We multiply by 255 to get back to visible range.
+        flat = (denoised.astype(float) / background.astype(float)) * 255
+
+        # Clip values that went too high and convert back to uint8
+        flat = np.clip(flat, 0, 255).astype(np.uint8)
+
+        # --- STEP 3: Enhance Contrast (CLAHE) ---
+        # CLAHE works on small tiles (8x8) to maximize contrast locally.
+        # clipLimit prevents it from boosting noise too much.
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(flat)
+
+        # --- Finish ---
+        # Convert back to Float 0-1 for the Neural Network
+        processed_img = enhanced.astype(np.float32) / 255.0
+
+        return torch.tensor(processed_img).unsqueeze(0)  # Shape [1, H, W]
 
 
 TRANSFORM: dict = {
