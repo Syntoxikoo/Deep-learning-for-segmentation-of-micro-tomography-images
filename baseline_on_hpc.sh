@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -J TOMO_DICE
+#BSUB -J TOMO_trans
 #BSUB -q gpua100
 #BSUB -n 4
 #BSUB -R "rusage[mem=32GB]"
@@ -42,12 +42,12 @@ source .venv/bin/activate
 echo ""
 echo "=========== training ================="
 
-python -m src.scripts.train.train_with_baseline \
+python -m src.scripts.train.train_with_baseline_trans \
     --on_cluster True \
     --epochs 100 \
-    --learning_rate 1e-5 \
+    --learning_rate 1e-4 \
     --batch_size 6 \
-    --loss dice
+    --loss both
 
 EXIT_CODE=$?
 
