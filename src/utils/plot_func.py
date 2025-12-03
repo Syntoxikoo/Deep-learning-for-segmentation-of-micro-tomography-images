@@ -3,7 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
+from typing import Optional, List, Union
 
 def plot_losses_curves(train_losses, val_losses, save_dir, show=False):
     plt.figure(figsize=(10, 6))
@@ -72,7 +72,7 @@ def plot_data_transform(
     image,
     label=None,
     weight=None,
-    transform: str | None = None,
+    transform: Optional[str] = None,
     save_dir=None,
     show=False,
 ):

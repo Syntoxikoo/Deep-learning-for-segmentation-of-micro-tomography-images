@@ -1,16 +1,208 @@
 import torch
-import torch.nn.functional as F
 from torch import nn
+import torch.nn.functional as F
 
-from ..utils import init_weights
-from .baseline_Unet import DoubleConv, Down, Up
+class PrintSize(nn.Module): 
+    """Utility module to print current shape of a Tensor in Sequential, only at the first pass."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.first = True
+
+    def forward(self, x):
+        if self.first:
+            print(f"Size: {x.size()}")
+            self.first = False
+        return x
+
+class Convblock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        filter_size: int = 3,
+        dropout_rate: float = 0.2,
+        **kwargs,
+    ):
+        super().__init__()
+
+        stride: int = kwargs.get("stride", 1)
+        dilation: int = kwargs.get("dilation", 1)
+        normalize: bool = kwargs.get("normalize", False)
+
+        # Preserve resolution with padding=1 for 3×3 kernels
+        padding = 1 if filter_size == 3 else 0
+
+        self.conv1 = nn.Conv2d(
+            in_channels, out_channels, filter_size,
+            stride=stride, padding=padding, dilation=dilation
+        )
+        self.bNorm1 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
+        self.conv2 = nn.Conv2d(
+            out_channels, out_channels, filter_size,
+            stride=stride, padding=padding, dilation=dilation
+        )
+        self.bNorm2 = nn.BatchNorm2d(out_channels) if normalize else nn.Identity()
+
+        self.dropout = nn.Dropout2d(dropout_rate)
+        self.activation = nn.ReLU(True)
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.bNorm1(out)
+        out = self.activation(out)
+        out = self.conv2(out)
+        out = self.bNorm2(out)
+        out = self.activation(out)
+        out = self.dropout(out)
+        return out
 
 
-class ViTBottleneck(nn.Module):
-    """Vision Transformer bottleneck using standard PyTorch TransformerEncoder.
+class EncodeBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, residual_channels, pool_size=2, **kwargs):
+        super().__init__()
+        self.conv_block = Convblock(in_channels, out_channels, **kwargs)
 
-    Converts spatial features to tokens, processes with transformer attention,
-    and converts back to spatial representation.
+        # Only one downsample per encoder block
+        self.pool = nn.MaxPool2d(pool_size, stride=pool_size)
+
+    def forward(self, x):
+        out = self.conv_block(x)
+        pooled = self.pool(out)
+        return pooled, out.clone()
+
+
+class DecodeBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, up_size=2, **kwargs):
+        super().__init__()
+
+        upsampling = kwargs.get("upsampling", "bilinear")
+
+        # Upsample bilinear instead of nearest
+        if upsampling == "Ctranspose":
+            self.up = nn.ConvTranspose2d(in_channels, in_channels, up_size, stride=up_size)
+        else:
+            self.up = nn.Upsample(scale_factor=up_size, mode="bilinear", align_corners=False)
+
+        self.conv_block = Convblock(in_channels//2 + in_channels, out_channels, **kwargs)
+
+    def forward(self, x, residual):
+        x = self.up(x)
+
+        # Interpolate residual to match decoder spatial size
+        residual = F.interpolate(residual, size=x.shape[2:], mode="bilinear", align_corners=False)
+
+        x = torch.cat([residual, x], dim=1)
+        return self.conv_block(x)
+
+
+class EncodeBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        residual_channels: int,
+        pool_size: int = 2,
+        *args,
+        **kwargs,
+    ):
+        super().__init__()
+        self.conv_block = Convblock(in_channels, out_channels, *args, **kwargs)
+        self.pool = nn.MaxPool2d(pool_size, pool_size)
+        self.resample = None
+        normalize: bool = kwargs.get("normalize", False)
+
+        if residual_channels != out_channels:
+            self.resample = nn.Sequential(
+                nn.Conv2d(out_channels, residual_channels, 1),
+                nn.BatchNorm2d(residual_channels) if normalize else nn.Identity(),
+            )
+
+    def forward(self, x):
+
+        out = self.conv_block(x)
+        pooled = self.pool(out)
+        if self.resample is not None:
+            residual = self.resample(out)
+        else:
+            residual = out.clone()
+
+        return pooled, residual
+
+
+class DecodeBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        up_size: int = 2,
+        *args,
+        **kwargs,
+    ):
+        super().__init__()
+        self.residual_meth = kwargs.get("residual", "interpolate")
+        upsampling = kwargs.get("upsampling", "nearest")
+
+        self.conv_block = Convblock(in_channels, out_channels, *args, **kwargs)
+
+        if upsampling == "Ctranspose":
+            self.up = nn.ConvTranspose2d(
+                in_channels, in_channels, up_size, stride=up_size
+            )
+        else:
+            self.up = nn.Upsample(scale_factor=up_size, mode=upsampling)
+        self.p1 = PrintSize()
+        self.p2 = PrintSize()
+        self.p3 = PrintSize()
+        self.resample = None
+        if up_size > 1:
+            features = int(in_channels / up_size)
+            self.resample = nn.Sequential(
+                nn.Conv2d(in_channels, features, 1),
+                nn.BatchNorm2d(features),
+            )
+
+    def forward(self, x, residual=None):
+
+        upsampled = self.up(x)
+        self.p1(upsampled)
+        if self.resample is not None:
+            upsampled = self.resample(upsampled)
+
+        self.p2(upsampled)
+        if residual is not None:
+            if self.residual_meth.lower() == "interpolate":
+                residual = F.interpolate(
+                    residual, upsampled.shape[2:], mode="bilinear", align_corners=False
+                )
+            else:
+                if residual.shape[2:] != upsampled.shape[2:]:
+                    diff_h = residual.shape[2] - upsampled.shape[2]
+                    diff_w = residual.shape[3] - upsampled.shape[3]
+                    crop_h = diff_h // 2
+                    crop_w = diff_w // 2
+                    residual = residual[
+                        :,
+                        :,
+                        crop_h : crop_h + upsampled.shape[2],
+                        crop_w : crop_w + upsampled.shape[3],
+                    ]
+            concat = torch.cat((residual, upsampled), dim=1)
+        else:
+            concat = upsampled
+        self.p3(concat)
+        out = self.conv_block(concat)
+
+        return out
+
+
+class ViTBottleneck(nn.Module):       # wrapper around PyTorch's nn.TransformerEncoder, operating on flattened (H*W) spatial tokens
+    """
+    ViT-style Transformer bottleneck used inside U_net_ViT.
+
+    Operates on a feature map of shape (B, C, H, W) by treating each spatial
+    location as a token of dimension C, applying a stack of TransformerEncoder
+    layers, and reshaping back to the same 4D shape.
     """
 
     def __init__(
@@ -18,7 +210,7 @@ class ViTBottleneck(nn.Module):
         channels: int,
         num_layers: int = 2,
         num_heads: int = 4,
-        mlp_dim: int | None = None,
+        mlp_dim: int = None,
         dropout: float = 0.1,
     ):
         super().__init__()
@@ -40,21 +232,31 @@ class ViTBottleneck(nn.Module):
         )
 
     def forward(self, x):
+        # x: (B, C, H, W)
         b, c, h, w = x.shape
+
+        # Flatten spatial dims into a sequence of tokens: (B, H*W, C)
         tokens = x.view(b, c, h * w).permute(0, 2, 1)
+
+        # Apply Transformer encoder
         tokens = self.encoder(tokens)
+
+        # Reshape back to (B, C, H, W)
         x_out = tokens.permute(0, 2, 1).view(b, c, h, w)
         return x_out
 
 
 class BottleneckViT(nn.Module):
-    """Bottleneck block combining convolutions with Vision Transformer.
+    """
+    Replacement for the original convolutional bottleneck.
 
-    Features:
-    - Preserves spatial dimensions via padding
-    - Optionally downsamples if input exceeds max_tokens for efficiency
-    - Applies transformer attention for global context
-    - Upsamples back to original resolution
+    Includes ADAPTIVE downsampling before the ViT:
+        - Repeatedly downsample until H*W <= max_tokens
+        - Conv → BN/ReLU → Conv → BN/ReLU
+        - Transformer (ViTBottleneck)
+        - Upsample back to original bottleneck resolution
+
+    This keeps memory under control even for large inputs like 1270x1350.
     """
 
     def __init__(
@@ -64,23 +266,23 @@ class BottleneckViT(nn.Module):
         normalize: bool = False,
         vit_num_layers: int = 2,
         vit_num_heads: int = 4,
-        vit_mlp_dim: int | None = None,
+        vit_mlp_dim: int = None,
         vit_dropout: float = 0.2,
         filter_size: int = 3,
-        max_tokens: int = 2048,
+        max_tokens: int = 2048,  # <--- safe upper bound for H*W seen by ViT
     ):
         super().__init__()
 
         self.max_tokens = max_tokens
 
-        self.conv = DoubleConv(
-            in_channels,
-            bottleneck_channels,
-            filter_size=filter_size,
-            normalize=normalize,
-        )
+        # Conv part (similar to original bottleneck)
+        self.conv1 = nn.Conv2d(in_channels, bottleneck_channels, filter_size)
+        self.bn1 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
+        self.conv2 = nn.Conv2d(bottleneck_channels, bottleneck_channels, filter_size)
+        self.bn2 = nn.BatchNorm2d(bottleneck_channels) if normalize else nn.Identity()
+        self.act = nn.ReLU(True)
 
-        # Vision Transformer for global context
+        # ViT bottleneck
         self.vit = ViTBottleneck(
             channels=bottleneck_channels,
             num_layers=vit_num_layers,
@@ -90,8 +292,10 @@ class BottleneckViT(nn.Module):
         )
 
     def forward(self, x):
+        # Remember original spatial size at the bottleneck
         b, c, h0, w0 = x.shape
 
+        # 1) Adaptively downsample until token count is safe
         x_down = x
         down_factor = 1
         while (
@@ -102,95 +306,87 @@ class BottleneckViT(nn.Module):
             x_down = F.max_pool2d(x_down, kernel_size=2, stride=2)
             down_factor *= 2
 
-        x_down = self.conv(x_down)
+        # 2) Conv block at reduced resolution
+        x_down = self.conv1(x_down)
+        x_down = self.bn1(x_down)
+        x_down = self.act(x_down)
+        x_down = self.conv2(x_down)
+        x_down = self.bn2(x_down)
+        x_down = self.act(x_down)
 
+        # 3) Transformer on reduced-resolution feature map
         x_down = self.vit(x_down)
 
+        # 4) Upsample back to the original bottleneck spatial size
         x_up = F.interpolate(
             x_down,
-            size=(h0, w0),
+            size=(h0, w0),  # explicitly restore original H,W
             mode="bilinear",
             align_corners=False,
         )
 
         return x_up
 
-
-class UNetViT(nn.Module):
-    """U-Net with Vision Transformer Bottleneck.
-
-    Architecture:
-    - Encoder: series of DoubleConv + MaxPool blocks
-    - Bottleneck: BottleneckViT with transformer attention
-    - Decoder: series of Up blocks with skip connections
-
-    Args:
-        in_channels: number of input channels (default: 1 for grayscale)
-        num_classes: number of output classes (default: 2 for binary segmentation)
-        features: tuple of feature dimensions at each level (default: (64, 128, 256, 512))
-        up_method: upsampling method - "Ctranspose" for ConvTranspose2d or "bilinear" for bilinear interpolation
-        normalize: if True, use BatchNorm; else use GroupNorm for small batch sizes
-        filter_size: kernel size for convolutions (default: 3)
-        dropout: dropout rate for regularization (default: 0.0)
-        vit_num_layers: number of transformer encoder layers (default: 2)
-        vit_num_heads: number of attention heads (default: 4)
-        vit_mlp_dim: MLP hidden dimension for transformer (default: 4*channels)
-        vit_dropout: dropout rate for transformer (default: 0.2)
-        max_tokens: maximum number of tokens for ViT (default: 2048)
-    """
-
+class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dropout, are new variables, 
+                            # default to small values so behavior matches simple Unet when ViT is shallow
     def __init__(
         self,
-        in_channels: int = 1,
-        num_classes: int = 2,
-        features: tuple = (64, 128, 256, 512),
-        up_method: str = "Ctranspose",
-        normalize: bool = True,
+        encode_in: tuple = (1,),
+        encode_out: tuple = (64,),
+        decode_in: tuple = (128,),
+        decode_out: tuple = (64,),
         filter_size: int = 3,
-        dropout: float = 0.0,
         vit_num_layers: int = 2,
         vit_num_heads: int = 4,
-        vit_mlp_dim: int | None = None,
+        vit_mlp_dim: int = None,
         vit_dropout: float = 0.2,
-        max_tokens: int = 2048,
         **kwargs,
-    ):
+    ) -> None:
+        """U-net with Transformer bottleneck, closely following baseline_Unet.py.
+
+        Args:
+            encode_in (tuple, optional): n_channels per layer of encoding (entry).
+            encode_out (tuple, optional): n_channels per layer of encoding (out).
+            decode_in (tuple, optional): n_channels per layer of decoding (entry).
+            decode_out (tuple, optional): n_channels per layer of decoding (out).
+            filter_size (int, optional): kernel size for convs.
+            vit_num_layers (int): number of TransformerEncoder layers in the bottleneck.
+            vit_num_heads (int): number of attention heads in each Transformer layer.
+            vit_mlp_dim (int or None): hidden dimension of the MLP inside Transformer.
+            vit_dropout (float): dropout probability inside Transformer.
+            kwargs:
+                - normalize (bool): perform normalization after each conv
+                - stride (int): ..
+                - padding (int): ..
+                - dilation (int): ..
+                - upsampling (str): "Ctranspose" or "bilinear"
+                - residual (str): "interpolate" or "crop"
+        """
         super().__init__()
-        self.in_channels = in_channels
-        self.num_classes = num_classes
-        self.features = list(features)
-        self.up_method = up_method
-        self.normalize = normalize
-        self.filter_size = filter_size
+        assert len(encode_in) == len(
+            decode_in
+        ), "U-net should have the same number of encode and decode layer"
 
-        batch_norm = kwargs.get("batchsize", 8) >= 8
-        kwargs["batch_norm"] = batch_norm
-
-        # ============ ENCODER ============
-        self.inc = DoubleConv(
-            in_channels,
-            self.features[0],
-            filter_size=filter_size,
-            normalize=normalize,
-            **kwargs,
-        )
-        self.downs = nn.ModuleList()
-        for i in range(len(self.features) - 1):
-            self.downs.append(
-                Down(
-                    self.features[i],
-                    self.features[i + 1],
+        normalize: bool = kwargs.get("normalize", False)
+        self.N_layers = len(encode_in)
+        self.encode = nn.ModuleList()
+        for ii in range(self.N_layers):
+            self.encode.append(
+                EncodeBlock(
+                    in_channels=encode_in[ii],
+                    out_channels=encode_out[ii],
+                    residual_channels=int(decode_in[self.N_layers - 1 - ii] / 2),
                     filter_size=filter_size,
-                    normalize=normalize,
-                    dropout=dropout,
                     **kwargs,
                 )
             )
 
-        # ============ BOTTLENECK ============
-        bottleneck_channels = self.features[-1] * 2
+        last_encode = encode_out[-1]
+        bottleneck_channels = kwargs.get("bottleneck_channels", last_encode * 2)
+
+        # main change compared to the simple Unet :
         self.bottleneck = BottleneckViT(
-            in_channels=self.features[-1],
+            in_channels=last_encode,
             bottleneck_channels=bottleneck_channels,
             normalize=normalize,
             vit_num_layers=vit_num_layers,
@@ -198,101 +394,60 @@ class UNetViT(nn.Module):
             vit_mlp_dim=vit_mlp_dim,
             vit_dropout=vit_dropout,
             filter_size=filter_size,
-            max_tokens=max_tokens,
         )
 
-        # ============ DECODER ============
-        self.ups = nn.ModuleList()
-        prev_channels = bottleneck_channels
-        for feat in reversed(self.features):
-            self.ups.append(
-                Up(
-                    prev_channels,
-                    feat,
+        self.decode = nn.ModuleList()
+        for ii in range(self.N_layers):
+            self.decode.append(
+                DecodeBlock(
+                    in_channels=decode_in[ii],
+                    out_channels=decode_out[ii],
                     filter_size=filter_size,
-                    normalize=normalize,
-                    upsampling=up_method,
-                    dropout=dropout,
                     **kwargs,
                 )
             )
-            prev_channels = feat
-
-        # ============ OUTPUT ============
-        self.outc = nn.Conv2d(self.features[0], num_classes, kernel_size=1)
-
-        # ============ DEEP SUPERVISION ============
-        # Auxiliary prediction heads for intermediate decoder outputs
-        # Match decoder outputs: (512, 256, 128, 64)
-        ds_in = tuple(reversed(self.features))
-        self.deep_heads = nn.ModuleList([nn.Conv2d(ch, num_classes, 1) for ch in ds_in])
-
+        #self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
+        self.segment_conv = nn.Conv2d(decode_out[-1], 1, kernel_size=1)    #change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
+        
+        self.deep_heads = nn.ModuleList([
+            nn.Conv2d(512, 1, 1),
+            nn.Conv2d(256, 1, 1),
+            nn.Conv2d(128, 1, 1),
+            nn.Conv2d(64, 1, 1),
+        ])
+    
     def forward(self, x):
-        """Forward pass through encoder, bottleneck, and decoder.
+        residuals: list = []
 
-        Args:
-            x: (B, C_in, H, W) input image
+        # Encode with residual conn
+        for ii in range(self.N_layers):
+            x, residual = self.encode[ii](x)
+            residuals.append(residual)
 
-        Returns:
-            logits: (B, num_classes, H, W) segmentation logits
-            deep_preds: List of (B, num_classes, H, W) predictions from intermediate decoders
-        """
-        # ============ ENCODER ============
-        skips = []
+        # Bottleneck (conv + Transformer)
+        x = self.bottleneck(x)
 
-        x0 = self.inc(x)
-        skips.append(x0)
-        x_cur = x0
-
-        # Downsampling path: store skip connections
-        for down in self.downs:
-            conv_out, pooled = down(x_cur)
-            skips.append(conv_out)
-            x_cur = pooled
-
-        # ============ BOTTLENECK ============
-        deepest = skips.pop()  # Last encoder feature before bottleneck
-        x = self.bottleneck(x_cur)
-
-        # ============ DECODER ============
-        skips = skips[::-1]
-
+        # Decode with concat
+        residuals = residuals[::-1]
         deep_preds = []
-        for i, up in enumerate(self.ups):
-            if i == 0:
-                skip = deepest
-            else:
-                skip = skips[i - 1] if i - 1 < len(skips) else None
-            x = up(x, skip)
 
-            # Collect deep supervision predictions
-            if i < len(self.deep_heads):
-                dp = self.deep_heads[i](x)
-                dp = F.interpolate(
-                    dp, size=x.shape[2:], mode="bilinear", align_corners=False
-                )
+        for ii in range(self.N_layers):
+            x = self.decode[ii](x, residuals[ii])
+
+            # grab deep supervision predictions
+            if ii < len(self.deep_heads):
+                dp = self.deep_heads[ii](x)
+                dp = F.interpolate(dp, size=x.shape[2:], mode="bilinear", align_corners=False)
                 deep_preds.append(dp)
 
-        # ============ OUTPUT ============
-        logits = self.outc(x)
-        return logits, deep_preds
+        # Final prediction
+        final_pred = self.segment_conv(x)
+        return final_pred, deep_preds
 
 
-# ============ SMOKE TEST ============
-if __name__ == "__main__":
-    model = UNetViT(
-        in_channels=1,
-        num_classes=2,
-        features=(64, 128, 256, 512),
-        up_method="Ctranspose",
-        normalize=True,
-        vit_num_layers=2,
-        vit_num_heads=4,
-    )
-    model.apply(init_weights)
+if __name__ == "__main__": # dummy test
+    model = U_net_ViT()
+    x = torch.randn(1, 1, 572, 572)
+    x_out = model(x)
+    print("Out shape: ", x_out.shape)
 
-    x = torch.randn(1, 1, 388, 388)
-    out = model(x)
-    print("Input shape:", x.shape)
-    print("Output shape:", out.shape)
-    print("Expected shape: torch.Size([1, 2, 388, 388])")

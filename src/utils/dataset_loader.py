@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 from torchvision import tv_tensors
 from torchvision.io import decode_png
 from torchvision.transforms import v2
+from typing import Optional, List, Union
 
 from .weights_map_unet_paper import compute_weight_map
 
@@ -21,8 +22,8 @@ class UnetDataset(Dataset):
         path,
         split: str,
         transform=None,
-        padding: list[int] | None = None,
-        resized_shape: list | None = None,
+        padding: Optional[List[int]] = None,
+        resized_shape: Optional[List[int]] = None,
     ):
         self.img_dir = os.path.join(path, split, "imgs")
         self.label_dir = os.path.join(path, split, "labels")
@@ -80,7 +81,7 @@ class TOMODataset(Dataset):
     def __init__(
         self,
         img_dir,
-        label_dir: Path | str | None = None,
+        label_dir: Optional[Union[Path, str]] = None,
         transform=None,
         resized_shape=None,
         split="train",
@@ -215,7 +216,8 @@ class TOMODataset(Dataset):
 
         return torch.tensor(weight_map, dtype=torch.float32)
 
-    def normalize(self, arr, mode: str | None = None):
+    
+    def normalize(self, arr, mode: Optional[str] = None):
         """
         Centers the dynamic range on the actual material, discard artifacts.
         """
