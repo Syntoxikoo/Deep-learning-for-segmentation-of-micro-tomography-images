@@ -174,7 +174,7 @@ class UNet(nn.Module):
         self.up_method = up_method
         self.normalize = normalize
         self.filter_size = filter_size
-        batch_norm = kwargs.get("batchsize", 8) >= 8
+        batch_norm = kwargs.get("batchsize", 6) >= 6
         kwargs["batch_norm"] = batch_norm
         # Encoder path
         self.inc = DoubleConv(

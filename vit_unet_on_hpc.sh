@@ -2,7 +2,7 @@
 #BSUB -J VIT-UNET_train
 #BSUB -q gpua100
 #BSUB -n 4
-#BSUB -R "rusage[mem=16GB]"
+#BSUB -R "rusage[mem=32GB]"
 #BSUB -R "span[hosts=1]"
 #BSUB -gpu "num=1:mode=exclusive_process"
 #BSUB -W 3:00
@@ -43,13 +43,11 @@ echo ""
 echo "=========== training ================="
 
 python -m src.scripts.train.train_unet_vit \
-    --on_cluster True \
     --epochs 100 \
     --batch_size 8\
     --lr 5e-5\
     --vit_num_layers 4 \
     --vit_num_heads 8  \
-    --vit_dropout 0.3 \
     --max_tokens 4096 \
     --input_size 512 \
 

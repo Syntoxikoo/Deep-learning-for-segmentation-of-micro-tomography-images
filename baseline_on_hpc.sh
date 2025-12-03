@@ -1,8 +1,8 @@
 #!/bin/bash
-#BSUB -J TOMO_DICE
+#BSUB -J TOMO_trans
 #BSUB -q gpua100
 #BSUB -n 4
-#BSUB -R "rusage[mem=8GB]"
+#BSUB -R "rusage[mem=32GB]"
 #BSUB -R "span[hosts=1]"
 #BSUB -gpu "num=1:mode=exclusive_process"
 #BSUB -W 2:00
@@ -42,11 +42,12 @@ source .venv/bin/activate
 echo ""
 echo "=========== training ================="
 
-python -m src.scripts.train.train_with_baseline \
+python -m src.scripts.train.train_with_baseline_trans \
     --on_cluster True \
     --epochs 100 \
-    --learning_rate 1e-5 \
-    --batch_size 8
+    --learning_rate 1e-4 \
+    --batch_size 6 \
+    --loss both
 
 EXIT_CODE=$?
 
