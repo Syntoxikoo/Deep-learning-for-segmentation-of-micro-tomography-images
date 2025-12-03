@@ -42,6 +42,7 @@ set -e
 IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
 MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
 SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
+LOG_DIR = "/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs"
 
 EPOCHS=100
 LR=1e-4
@@ -75,6 +76,10 @@ fi
 # ------------------------------
 mkdir -p "$SAVE_DIR"
 echo "Save directory created/checked: $SAVE_DIR"
+
+mkdir -p "$LOG_DIR"
+echo "Save directory created/checked: $LOG_DIR"
+
 
 # ------------------------------
 # Clean any leftover GPU memory from previous jobs
