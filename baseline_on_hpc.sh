@@ -2,7 +2,7 @@
 #BSUB -J TOMO_DICE
 #BSUB -q gpua100
 #BSUB -n 4
-#BSUB -R "rusage[mem=8GB]"
+#BSUB -R "rusage[mem=32GB]"
 #BSUB -R "span[hosts=1]"
 #BSUB -gpu "num=1:mode=exclusive_process"
 #BSUB -W 2:00
@@ -46,7 +46,8 @@ python -m src.scripts.train.train_with_baseline \
     --on_cluster True \
     --epochs 100 \
     --learning_rate 1e-5 \
-    --batch_size 8
+    --batch_size 6 \
+    --loss dice
 
 EXIT_CODE=$?
 
