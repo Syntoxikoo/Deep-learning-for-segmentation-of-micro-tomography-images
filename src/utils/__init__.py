@@ -1,5 +1,5 @@
 from .custom_loss import ConsistencyLoss, DiceLoss, DiceMetric, WeightCELoss
-from .dataset_loader import TRANSFORM, TOMODataset, UnetDataset
+from .dataset_loader import TRANSFORM,SIMPLE_TRANSFORM, TOMODataset, UnetDataset
 from .plot_func import (
     plot_data_transform,
     plot_losses_curves,
@@ -21,6 +21,7 @@ __all__ = [
     "ConsistencyLoss",
     "WeightCELoss",
     "TRANSFORM",
+    "SIMPLE_TRANSFORM",
     "UnetDataset",
     "TOMODataset",
     "plot_losses_curves",

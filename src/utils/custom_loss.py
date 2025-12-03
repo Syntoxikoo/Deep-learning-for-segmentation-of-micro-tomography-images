@@ -56,7 +56,7 @@ class DiceLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs, targets,weights):
         inputs = torch.softmax(inputs, dim=1)
 
         input_obj = inputs[:, 1, :, :]

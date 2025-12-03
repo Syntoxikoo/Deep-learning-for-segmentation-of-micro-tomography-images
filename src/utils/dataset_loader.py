@@ -87,13 +87,15 @@ class TOMODataset(Dataset):
         split="train",
         train_ratio=0.8,
         seed=42,
+        gaussian_weight = False,
     ):
         self.img_dir = img_dir
+        self.label_dir = label_dir
         self.transform = transform
         self.resized_shape = resized_shape
         self.split = split
         self.train_ratio = train_ratio
-
+        self.gaussian_weight = gaussian_weight
         self.imgs_names = sorted(os.listdir(img_dir))
 
         total_samples = len(self.imgs_names)
@@ -110,7 +112,6 @@ class TOMODataset(Dataset):
         else:
             raise ValueError("split must be 'train' or 'test'")
 
-        self.label_dir = label_dir
         if label_dir is not None:
             self.labels_names = sorted(os.listdir(label_dir))
             assert len(self.imgs_names) == len(self.labels_names), (
@@ -201,21 +202,24 @@ class TOMODataset(Dataset):
         w_c[mask == 1] = total_pixels / (2 * c1_count) if c1_count != 0 else 0
         w_c = np.clip(w_c, 0.1, 10.0)
 
-        # if c1_count > 0 and c0_count > 0:
-        #     # Distance from background pixels to nearest foreground object
-        #     dist1 = distance_transform_edt(mask == 0)
-        #     # Distance from background pixels to nearest foreground object
-        #     dist2 = distance_transform_edt(mask == 1)
-        #     dist = dist1 + dist2
-
-        #     gaussian_w = w0 * np.exp((-(dist**2)) / (2 * sigma**2))
-        #     weight_map = w_c + gaussian_w
-        # else:
         weight_map = w_c
 
-        # mean_weight = np.mean(weight_map)
-        # if mean_weight > 0:
-        #     weight_map = weight_map / mean_weight
+        if self.gaussian = True
+            if c1_count > 0 and c0_count > 0:
+                # Distance from background pixels to nearest foreground object
+                dist1 = distance_transform_edt(mask == 0)
+                # Distance from background pixels to nearest foreground object
+                dist2 = distance_transform_edt(mask == 1)
+                dist = dist1 + dist2
+
+                gaussian_w = w0 * np.exp((-(dist**2)) / (2 * sigma**2))
+                weight_map = w_c + gaussian_w
+            else:
+                weight_map = w_c
+
+            mean_weight = np.mean(weight_map)
+            if mean_weight > 0:
+                weight_map = weight_map / mean_weight
 
         return torch.tensor(weight_map, dtype=torch.float32)
 
@@ -253,13 +257,18 @@ TRANSFORM: dict = {
     "rotation": v2.RandomRotation([-20, 20]),
     "V-flip": v2.RandomVerticalFlip(p=0.5),
     "H-flip": v2.RandomHorizontalFlip(p=0.5),
-    # "Affine": v2.RandomAffine(
-    #     degrees=[-180, 180],
-    #     translate=(0.1, 0.1),
-    #     scale=(0.8, 1.2),
-    #     interpolation=v2.InterpolationMode.BILINEAR,
-    # ),
-    # "Stretch": v2.ElasticTransform(),
-    # "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
-    # "Color-jitter": v2.ColorJitter(brightness=0.1, contrast=0.1),
+    "Affine": v2.RandomAffine(
+        degrees=[-180, 180],
+        translate=(0.1, 0.1),
+        scale=(0.8, 1.2),
+        interpolation=v2.InterpolationMode.BILINEAR,
+    ),
+    "Stretch": v2.ElasticTransform(),
+    "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
+    "Color-jitter": v2.ColorJitter(brightness=0.2, contrast=0.1),
+}
+SIMPLE_TRANSFORM: dict = {
+    "rotation": v2.RandomRotation([-10, 10]),
+    "V-flip": v2.RandomVerticalFlip(p=0.5),
+    "H-flip": v2.RandomHorizontalFlip(p=0.5),
 }
