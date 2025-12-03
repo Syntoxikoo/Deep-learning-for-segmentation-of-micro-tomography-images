@@ -87,7 +87,7 @@ class TOMODataset(Dataset):
         split="train",
         train_ratio=0.8,
         seed=42,
-        gaussian_weight = False,
+        gaussian_weight=False,
     ):
         self.img_dir = img_dir
         self.label_dir = label_dir
@@ -204,7 +204,7 @@ class TOMODataset(Dataset):
 
         weight_map = w_c
 
-        if self.gaussian = True
+        if self.gaussian_weight == True:
             if c1_count > 0 and c0_count > 0:
                 # Distance from background pixels to nearest foreground object
                 dist1 = distance_transform_edt(mask == 0)
