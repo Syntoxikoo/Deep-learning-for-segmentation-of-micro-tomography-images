@@ -78,7 +78,7 @@ def main(on_cluster=True, batch_size=10, epochs=10, learning_rate=1e-4, data_dir
         in_channels=1,
         num_classes=2,
         features=(64, 128, 256, 512),
-        up_method="bilinear",
+        up_method="Ctranspose",
         normalize=True,
         drop_out=0.3,
         batch_size=batch_size,
