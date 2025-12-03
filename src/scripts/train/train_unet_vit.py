@@ -21,53 +21,48 @@ parser.add_argument("--mask_data_path", type=str, default="../../../datas/origin
 parser.add_argument("--epochs", type=int, default=40)
 parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--batch_size", type=int, default=1)
-parser.add_argument("--save_dir", type=str, default="../..models/predicted_models")
+parser.add_argument("--save_dir", type=str, default="../../../models/predicted_models")
 args = parser.parse_args()
-
-class MicroCTDataset(Dataset):
-    def __init__(self, img_dir, mask_dir, transform=None):
-        self.img_dir = img_dir
-        self.mask_dir = mask_dir
-        self.transform = transform
-        self.img_files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith('.tif')])
-        self.mask_files = [f.replace("image_v2_", "image_v2_mask_") for f in self.img_files]
-
-        self.preprocess = T.Resize((768,768), interpolation=T.InterpolationMode.BILINEAR)
-
-    def __len__(self): return len(self.img_files)
-
-    def __getitem__(self, idx):
-        img = tiff.imread(os.path.join(self.img_dir, self.img_files[idx]))
-        mask = tiff.imread(os.path.join(self.mask_dir, self.mask_files[idx]))
-        if img.ndim==3: img = img[img.shape[0]//2]
-        if mask.ndim==3: mask = mask[mask.shape[0]//2]
-
-        img = img.astype(np.float32); img/=img.max()
-        mask=(mask>0).astype(np.float32)
-
-        img=Image.fromarray(img); mask=Image.fromarray(mask)
-        img=self.preprocess(img); mask=self.preprocess(mask)
-        img=torch.tensor(np.array(img)).unsqueeze(0)
-        mask=torch.tensor(np.array(mask)).unsqueeze(0)
-
-        if self.transform:
-            data=torch.cat([img,mask],dim=0); data=self.transform(data)
-            img,mask=data[0].unsqueeze(0), data[1].unsqueeze(0)
-        return img, mask
 
 class DiceLoss(nn.Module):
     def forward(self,p,t, smooth=1e-6):
         p=torch.sigmoid(p)
         return 1-(2*(p*t).sum()+smooth)/(p.sum()+t.sum()+smooth)
 
+# class DiceMetric:
+#     def __call__(self,p,t,eps=1e-6):
+#         p=(p.reshape(-1)>0.5).float(); t=t.reshape(-1)
+#         i=(p*t).sum(); u=p.sum()+t.sum()
+#         return ((2*i+eps)/(u+eps)).item()
+
 class DiceMetric:
-    def __call__(self,p,t,eps=1e-6):
-        p=(p.reshape(-1)>0.5).float(); t=t.reshape(-1)
-        i=(p*t).sum(); u=p.sum()+t.sum()
-        return ((2*i+eps)/(u+eps)).item()
+    def __call__(self, p, t, eps=1e-6):
+        """
+        p: model output logits or probabilities, shape (B,C,H,W) or (H,W)
+        t: ground truth, float 0/1, same shape
+        """
+        if p.dtype != torch.float32:
+            p = p.float()
+        if t.dtype != torch.float32:
+            t = t.float()
+
+        # convert logits -> probabilities if needed
+        if p.max() > 1.0 or p.min() < 0.0:
+            p = torch.sigmoid(p)
+
+        # flatten
+        p_flat = (p.reshape(-1) > 0.5).float()
+        t_flat = t.reshape(-1)
+
+        intersection = (p_flat * t_flat).sum()
+        union = p_flat.sum() + t_flat.sum()
+
+        dice = (2*intersection + eps) / (union + eps)
+        return dice.item()
+
 
 dice_metric=DiceMetric()
-metric=DiceMetric=DiceMetric()
+metric=DiceMetric()
 
 # train_transform = T.Compose([
 #     T.RandomHorizontalFlip(), T.RandomVerticalFlip(),
@@ -81,7 +76,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 train_transform = A.Compose([
     A.HorizontalFlip(p=0.5),
     A.VerticalFlip(p=0.5),
-    A.Rotate(limit=10, border_mode=0, p=0.5),
+    A.Rotate(limit=10, border_mode=0,interpolation=1, p=0.5),
     A.RandomResizedCrop((768, 768), scale=(0.85, 1.0), p=1.0),
     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
 ],

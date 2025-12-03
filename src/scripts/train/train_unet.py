@@ -21,7 +21,7 @@ parser.add_argument("--mask_data_path", type=str, default="../../../datas/origin
 parser.add_argument("--epochs", type=int, default=40)
 parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--batch_size", type=int, default=1)
-parser.add_argument("--save_dir", type=str, default="../..models/predicted_models")
+parser.add_argument("--save_dir", type=str, default="../../models/predicted_models")
 args = parser.parse_args()
 
 class MicroCTDataset(Dataset):
