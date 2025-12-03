@@ -1,45 +1,36 @@
-import copy
 import torch
 import torch.nn as nn
-
-from .Unet_ViT import U_net_ViT
+import copy
 
 
 class MeanTeacherUNetV2(nn.Module):
     """
-    Mean Teacher wrapper for the NEW U_net_ViT (1-channel output + deep supervision).
+    Minimal Mean Teacher wrapper around your UNet-ViT model.
     """
 
-    def __init__(
-        self,
-        ema_alpha=0.99,
-        **kwargs
-    ):
+    def __init__(self, student_model: nn.Module, ema_alpha: float = 0.99):
         super().__init__()
 
+        self.student = student_model
+        self.teacher = copy.deepcopy(student_model)
         self.ema_alpha = ema_alpha
 
-        # ---- student ----
-        self.student = U_net_ViT(**kwargs)
-
-        # ---- teacher ----
-        self.teacher = copy.deepcopy(self.student)
         for p in self.teacher.parameters():
             p.requires_grad = False
 
     @torch.no_grad()
     def update_teacher(self):
+        """EMA update: teacher = α * teacher + (1-α) * student."""
         alpha = self.ema_alpha
-        for t, s in zip(self.teacher.parameters(), self.student.parameters()):
-            t.data.mul_(alpha).add_(s.data, alpha=1 - alpha)
+        for t_p, s_p in zip(self.teacher.parameters(), self.student.parameters()):
+            t_p.data.mul_(alpha).add_(s_p.data, alpha=1.0 - alpha)
 
-    # Optional loading helpers
-    def load_student(self, ckpt_path, device="cpu"):
-        state = torch.load(ckpt_path, map_location=device)
+    def load_student(self, path, device="cpu"):
+        state = torch.load(path, map_location=device)
         self.student.load_state_dict(state)
-        print(f"Loaded student from {ckpt_path}")
+        print(f"[MeanTeacherV2] loaded student from {path}")
 
-    def load_teacher(self, ckpt_path, device="cpu"):
-        state = torch.load(ckpt_path, map_location=device)
+    def load_teacher(self, path, device="cpu"):
+        state = torch.load(path, map_location=device)
         self.teacher.load_state_dict(state)
-        print(f"Loaded teacher from {ckpt_path}")
+        print(f"[MeanTeacherV2] loaded teacher from {path}")

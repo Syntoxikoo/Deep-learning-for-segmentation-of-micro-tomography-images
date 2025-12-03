@@ -406,16 +406,14 @@ class U_net_ViT(nn.Module): #vit_num_layers, vit_num_heads, vit_mlp_dim, vit_dro
                     **kwargs,
                 )
             )
-        #self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
-        self.segment_conv = nn.Conv2d(decode_out[-1], 1, kernel_size=1)    #change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
-        
+        self.segment_conv = nn.Sequential(nn.Conv2d(decode_out[-1], 2, 1))
+        #self.segment_conv = nn.Conv2d(decode_out[-1], 1, kernel_size=1)    #change that makes U-Net output 1 channel, not 2 since pred: (B, 1, H, W) and mask: (B, 1, H, W)
+
         self.deep_heads = nn.ModuleList([
-            nn.Conv2d(512, 1, 1),
-            nn.Conv2d(256, 1, 1),
-            nn.Conv2d(128, 1, 1),
-            nn.Conv2d(64, 1, 1),
+            nn.Conv2d(decode_in[i+1], 2, kernel_size=1)
+            for i in range(len(decode_in)-1)
         ])
-    
+
     def forward(self, x):
         residuals: list = []
 

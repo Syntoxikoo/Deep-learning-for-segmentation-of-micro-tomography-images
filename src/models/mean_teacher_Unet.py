@@ -3,8 +3,7 @@ import copy
 import torch
 import torch.nn as nn
 
-from .Unet_ViT import UNetViT
-
+from .Unet_ViT_OLDFILE import UNetViT
 
 class MeanTeacherUNet(nn.Module):
     """
