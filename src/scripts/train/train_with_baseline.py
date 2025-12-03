@@ -34,6 +34,7 @@ def main(
     epochs=10,
     learning_rate=1e-4,
     data_dir=None,
+    size=512,
     loss_choice: str = "both",
 ):
     # Setup directories
@@ -63,9 +64,20 @@ def main(
     label_dir = os.path.join(data_path, "Original Masks")
 
     train_dataset = TOMODataset(
-        img_dir, label_dir=label_dir, split="train", transform=transform
+        img_dir,
+        label_dir=label_dir,
+        split="train",
+        transform=transform,
+        resized_shape=[size, size],
+        gaussian_weight=True,
     )
-    test_dataset = TOMODataset(img_dir, label_dir=label_dir, split="test")
+    test_dataset = TOMODataset(
+        img_dir,
+        label_dir=label_dir,
+        split="test",
+        resized_shape=[size, size],
+        gaussian_weight=True,
+    )
 
     train_loader = DataLoader(
         train_dataset,
@@ -95,11 +107,11 @@ def main(
     model.to(device)
 
     # Training Params
-    ce_loss_fn = torch.nn.BCEWithLogitsLoss()
+    ce_loss_fn = WeightCELoss()
     dice_loss_fn = DiceLoss()
 
     def combined_loss(out, labels, weights):
-        return ce_loss_fn(out, labels) + dice_loss_fn(out, labels)
+        return ce_loss_fn(out, labels, weights) + dice_loss_fn(out, labels)
 
     if loss_choice == "both":
         loss_fn = combined_loss
@@ -109,7 +121,7 @@ def main(
         loss_fn = ce_loss_fn
 
     dice_metric = DiceMetric()
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2
     )
@@ -120,6 +132,7 @@ def main(
     val_dice_list = []
     best_test_loss = float("inf")
     # Training
+
     for epoch in range(epochs):
         # Training Step
         model.train()
@@ -147,6 +160,7 @@ def main(
                 out = model(images)
                 loss = loss_fn(out, labels, weights)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
             epoch_losses.append(loss.item())
@@ -246,6 +260,7 @@ def _arg_parse():
     )
     parser.add_argument("--data_dir", type=str, default=None)
     parser.add_argument("--loss", type=str, default="both")
+    parser.add_argument("--size", type=int, default=512)
     return parser.parse_args()
 
 

@@ -157,6 +157,6 @@ class AddGaussianNoise(object):
     def __init__(self, sigma=0.02):
         self.sigma = sigma
 
-    def __call__(self, tensor):
+    def __call__(self, tensor, label):
         noise = torch.randn(tensor.size()) * self.sigma
-        return tensor + noise
+        return tensor + noise, label

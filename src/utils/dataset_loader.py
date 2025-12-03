@@ -13,6 +13,7 @@ from torchvision import tv_tensors
 from torchvision.io import decode_png
 from torchvision.transforms import v2
 
+from .tools import AddGaussianNoise
 from .weights_map_unet_paper import compute_weight_map
 
 
@@ -204,7 +205,7 @@ class TOMODataset(Dataset):
 
         weight_map = w_c
 
-        if self.gaussian_weight == True:
+        if self.gaussian_weight:
             if c1_count > 0 and c0_count > 0:
                 # Distance from background pixels to nearest foreground object
                 dist1 = distance_transform_edt(mask == 0)
@@ -271,4 +272,5 @@ SIMPLE_TRANSFORM: dict = {
     "rotation": v2.RandomRotation([-10, 10]),
     "V-flip": v2.RandomVerticalFlip(p=0.5),
     "H-flip": v2.RandomHorizontalFlip(p=0.5),
+    "gauss_noise": AddGaussianNoise(0.05),
 }
