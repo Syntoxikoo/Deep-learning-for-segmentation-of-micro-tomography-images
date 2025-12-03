@@ -21,11 +21,15 @@ from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
+import matplotlib.pyplot as plt
+import torch.nn.functional as F
+
 
 # Add src folder to path
 REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT / "src"))
+print(REPO_ROOT)
+if str(REPO_ROOT) not in sys.path:  
+    sys.path.insert(0, str(REPO_ROOT))
 
 from src.models.mean_teacher_Unet import MeanTeacherUNet
 from src.utils import (
@@ -40,6 +44,7 @@ from src.utils import (
     init_weights,
     plot_losses_curves,
     plot_prediction,
+    plot_prediction_v2,
     setup_logger,
     visualize_student_vs_teacher,
 )
@@ -71,9 +76,9 @@ def parse_args():
         default="checkpoints",
     )
     # Training hyperparameters
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--input_size", type=int, default=512)
 
     # Semi-supervised hyperparameters
@@ -158,13 +163,50 @@ def main():
     )
 
     # Unlabeled dataset
+
+    # Unlabeled preprocessing: center crop
+    # unlabeled_crop = v2.CenterCrop((512, 512))
+    # unlabeled_crop = v2.CenterCrop((750, 750))
+
+    # unlabeled_transform = v2.Compose([
+    #     unlabeled_crop,               # remove circular border
+    #     *list(TRANSFORM.values()),    # same augmentations as labeled dataset
+    # ])
+    unlabeled_transform = transform
+
+    # #  Preview of CENTER CROP (before augmentation)
+    # # load a raw unlabeled image (first one in the folder)
+    # valid_ext = (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp")
+    # image_files = [f for f in os.listdir(args.unlabeled_dir) if f.lower().endswith(valid_ext)]
+    # raw_path = os.path.join(args.unlabeled_dir, image_files[0])
+    # # Load TIFF correctly (16-bit safe)
+    # raw_img = Image.open(raw_path)
+    # raw_np = np.array(raw_img).astype(float)
+    # # Normalize to [0,1] for visualization
+    # raw_np = (raw_np - raw_np.min()) / (raw_np.max() - raw_np.min() + 1e-8)
+    # print("Raw TIFF array range:", raw_np.min(), raw_np.max())
+    # print("Raw TIFF shape:", raw_np.shape)
+    # # Center crop manually (750×750 here)
+    # crop_h, crop_w = 750, 750
+    # H, W = raw_np.shape
+    # y0 = (H - crop_h) // 2
+    # x0 = (W - crop_w) // 2
+    # cropped_np = raw_np[y0:y0+crop_h, x0:x0+crop_w]
+    # plt.figure(figsize=(5,5))
+    # plt.imshow(cropped_np, cmap="gray")
+    # plt.title("Raw unlabeled TIFF after CENTER CROP (pre-augmentation)")
+    # plt.axis("off")
+    # plt.savefig(os.path.join(save_dir, "unlabeled_crop_raw.png"))
+    # plt.close()
+
+
     unlabeled_ds = TOMODataset(
         img_dir=args.unlabeled_dir,
         label_dir=None,
         split="train",
         train_ratio=1.0,
         resized_shape=resize,
-        transform=transform,
+        transform=unlabeled_transform,   # cropped images
     )
 
     train_loader = DataLoader(
@@ -222,7 +264,7 @@ def main():
     n_params = sum(p.numel() for p in model.student.parameters())
     logger.info(f"Model initialized. Student params: {n_params:,}")
 
-    add_noise = AddGaussianNoise(0.2)
+    add_noise = AddGaussianNoise(0.03)
 
     # ============ OPTIMIZER & LOSSES ============
     optimizer = optim.AdamW(model.student.parameters(), lr=args.lr, weight_decay=1e-5)
@@ -303,7 +345,8 @@ def main():
                     with torch.no_grad():
                         tea_logits_u, tea_deep_preds = model.teacher(imgs_u)
 
-                    imgs_u_noisy = add_noise(imgs_u)
+                    # imgs_u_noisy = add_noise(imgs_u)
+                    imgs_u_noisy = imgs_u
                     stu_logits_u, stu_deep_preds = model.student(imgs_u_noisy)
                     loss_cons = cons_loss_fn(stu_logits_u, tea_logits_u)
 
@@ -421,6 +464,7 @@ def main():
             # Save prediction visualization
             visualize_student_vs_teacher(model, unlabeled_loader, device, save_dir)
             plot_prediction(
+            #plot_prediction_v2(
                 images[0],
                 labels[0],
                 torch.argmax(logits, dim=1)[0],

@@ -67,6 +67,49 @@ def plot_prediction(image, label, pred, save_dir, epoch=None, show=False):
         plt.show()
     plt.close()
 
+def plot_prediction_v2(image, label, pred_logits, save_dir, epoch=None, show=False):
+    # Convert tensors
+    image = image.squeeze().cpu().numpy()
+    label = label.squeeze().cpu().numpy()
+
+    # Always convert logits → binary mask
+    if isinstance(pred_logits, torch.Tensor):
+        pred_mask = torch.argmax(pred_logits, dim=1).squeeze().cpu().numpy()
+    else:
+        pred_mask = pred_logits  # Already a numpy array or mask
+
+    plt.figure(figsize=(15, 5))
+    kwargs = {"fontsize": 12, "fontweight": "bold"}
+
+    # Image
+    plt.subplot(1, 3, 1)
+    plt.imshow(image, cmap="gray")
+    plt.title("Input Image", **kwargs)
+    plt.axis("off")
+
+    # Ground truth
+    plt.subplot(1, 3, 2)
+    plt.imshow(label, cmap="gray", vmin=0, vmax=1)
+    plt.title("Ground Truth", **kwargs)
+    plt.axis("off")
+
+    # Prediction (binary)
+    plt.subplot(1, 3, 3)
+    plt.imshow(pred_mask, cmap="gray", vmin=0, vmax=1)
+    plt.title("Prediction", **kwargs)
+    plt.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(
+        os.path.join(save_dir, f"prediction_plot_{epoch}.svg"),
+        dpi=600,
+        format="svg",
+        bbox_inches="tight",
+    )
+    if show:
+        plt.show()
+    plt.close()
+
 
 def plot_data_transform(
     image,

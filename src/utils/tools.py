@@ -152,11 +152,10 @@ def load_tiff_image(path):
         img = img[img.shape[0] // 2]
     return img
 
-
 class AddGaussianNoise(object):
     def __init__(self, sigma=0.02):
         self.sigma = sigma
 
     def __call__(self, tensor):
-        noise = torch.randn(tensor.size()) * self.sigma
+        noise = torch.randn_like(tensor) * self.sigma #had to change for some reason to not run on both CPU and CUDA
         return tensor + noise

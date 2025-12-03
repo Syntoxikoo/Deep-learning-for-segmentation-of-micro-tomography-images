@@ -4,6 +4,7 @@ from .plot_func import (
     plot_data_transform,
     plot_losses_curves,
     plot_prediction,
+    plot_prediction_v2,
     visualize_student_vs_teacher,
 )
 from .tools import (

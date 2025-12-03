@@ -11,6 +11,8 @@ from torch.utils.data import Dataset
 from torchvision import tv_tensors
 from torchvision.io import decode_png
 from torchvision.transforms import v2
+from skimage import exposure
+
 
 from .weights_map_unet_paper import compute_weight_map
 
@@ -129,10 +131,18 @@ class TOMODataset(Dataset):
         image = self.normalize(image)
         image = torch.from_numpy(image).float()
 
+        # channel formatting
         if image.ndim == 2:
             image = image.unsqueeze(0)
         elif image.ndim == 3:
             image = image.permute(2, 0, 1)
+
+        # ---- CENTER CROP FOR UNLABELED DATA ----
+        if self.label_dir is None:   # unlabeled dataset
+            # Crop on the ORIGINAL SIZE (1270x1350) AFTER normalization
+            image = v2.functional.center_crop(image, (650, 650))
+
+        # ---- NOW resize (for both labeled and unlabeled) ----
         if self.resized_shape:
             image = v2.functional.resize(image, self.resized_shape)
 
@@ -174,15 +184,27 @@ class TOMODataset(Dataset):
         img_path = os.path.join(self.img_dir, img_name)
         label_path = os.path.join(self.label_dir, label_name)
 
-        image = tifffile.imread(img_path)
+        image = tifffile.imread(img_path).astype(np.float32)
         label = tifffile.imread(label_path)
+
+        # ---- Normalize labeled to [0,1] (NO contrast equalization!) ----
+        image = (image - image.min()) / (image.max() - image.min() + 1e-8)
 
         return image, label
 
     def load_image(self, idx):
         img_name = self.imgs_names[idx]
         img_path = os.path.join(self.img_dir, img_name)
-        image = tifffile.imread(img_path)
+
+        image = tifffile.imread(img_path).astype(np.float32)
+
+        # ---- Normalize to [0, 1] ----
+        image = (image - image.min()) / (image.max() - image.min() + 1e-8)
+
+        # ---- Apply CLAHE ONLY for unlabeled data (label_dir is None) ----
+        if self.label_dir is None:
+            image = exposure.equalize_adapthist(image, clip_limit=0.02)
+
         return image
 
     def weights_masks(self, mask, w0=5, sigma=2):
@@ -246,14 +268,14 @@ class TOMODataset(Dataset):
 
 
 TRANSFORM: dict = {
-    "rotation": v2.RandomRotation([-20, 20]),
+    # "rotation": v2.RandomRotation([-20, 20]),    #removed beacause makes prediction detect empty background left from rotation as part of the image
     "V-flip": v2.RandomVerticalFlip(p=0.5),
     "H-flip": v2.RandomHorizontalFlip(p=0.5),
     "Affine": v2.RandomAffine(
-        degrees=[-180, 180],
-        translate=(0.1, 0.1),
-        scale=(0.8, 1.2),
-        interpolation=v2.InterpolationMode.BILINEAR,
+        degrees=[0, 0],             #removed because fucks up the unlabelled cropping
+        translate=(0.02, 0.02),
+        scale=(0.95, 1.05),
+        interpolation=v2.InterpolationMode.BILINEAR,       
     ),
     "Stretch": v2.ElasticTransform(),
     "Gaussian-blur": v2.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0)),
