@@ -273,10 +273,16 @@ class UnlabeledTOMODatasetViT(Dataset):
         image = tifffile.imread(img_path)  # can be 2D or 3D
         return image
 
+    # def _normalize(self, arr):
+    #     p1, p99 = np.percentile(arr, (1, 99))
+    #     arr = np.clip(arr, p1, p99)
+    #     return ((arr - p1) / (p99 - p1 + 1e-8)).astype(np.float32)
     def _normalize(self, arr):
-        p1, p99 = np.percentile(arr, (1, 99))
-        arr = np.clip(arr, p1, p99)
-        return ((arr - p1) / (p99 - p1 + 1e-8)).astype(np.float32)
+        # simple min-max scaling for unlabeled images
+        arr = arr.astype(np.float32)
+        return (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
+
+
 
     def _center_crop(self, arr):
         h, w = arr.shape
@@ -300,8 +306,9 @@ class UnlabeledTOMODatasetViT(Dataset):
         assert image.ndim == 2, f"Expected 2D image after slicing, got {image.shape}"
 
         # Normalize and center-crop BEFORE any augmentation
-        image = self._normalize(image)
         image = self._center_crop(image)  # → (768, 768)
+        image = self._normalize(image)
+        # print("unlabeled min/max:", image.min(), image.max())
 
         # Albumentations expects (H, W, C)
         base_np = image[:, :, None]  # (H, W, 1)

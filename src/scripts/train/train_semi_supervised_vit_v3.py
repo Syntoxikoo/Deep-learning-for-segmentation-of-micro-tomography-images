@@ -48,6 +48,21 @@ class SimpleModelWrapper:
         self.student.eval()
         self.teacher.eval()
 
+# Override argmax behavior by wrapping the model
+class BinaryVisWrapper(SimpleModelWrapper):
+    def eval(self):
+        self.student.eval()
+        self.teacher.eval()
+    def __call__(self, x):
+        # force 1 → 2 channels mimic for argmax
+        s_final, _ = self.student(x)
+        t_final, _ = self.teacher(x)
+
+        s2 = torch.cat([-s_final, s_final], dim=1)
+        t2 = torch.cat([-t_final, t_final], dim=1)
+
+        return s2, t2
+    
 # ----------------- losses -----------------
 class DiceLoss(nn.Module):
     def forward(self, p, t, smooth=1e-6):
@@ -65,9 +80,27 @@ class DiceMetric:
         i = (p * t).sum()
         u = p.sum() + t.sum()
         return ((2 * i + eps) / (u + eps)).item()
+class DiceMetricInv:
+    def __call__(self, p, t, eps=1e-6):
+        # p is logits or probs
+        if p.dtype.is_floating_point:
+            p = torch.sigmoid(p)
+
+        # binarize prediction
+        p = (p.reshape(-1) > 0.5).float()
+        t = t.reshape(-1).float()
+
+        # invert 1↔0 so that pore = foreground = 1
+        p = 1 - p
+        t = 1 - t
+
+        # compute dice on inverted (pore) mask
+        intersection = (p * t).sum()
+        union = p.sum() + t.sum()
+        return ((2 * intersection + eps) / (union + eps)).item()
 
 
-dice_metric = DiceMetric()
+dice_metric = DiceMetricInv()
 
 
 # ----------------- mean-teacher EMA update -----------------
@@ -87,8 +120,19 @@ parser.add_argument("--unlabeled_path", type=str, default="./datas/10min_HT")
 parser.add_argument("--epochs", type=int, default=4)
 parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--batch_size", type=int, default=1)
-parser.add_argument("--lambda_u", type=float, default=10.0, help="weight for unlabeled loss")
-parser.add_argument("--ema_alpha", type=float, default=0.99, help="EMA decay for teacher")
+# parser.add_argument("--lambda_u", type=float, default=10.0, help="weight for unlabeled loss")
+# parser.add_argument("--ema_alpha", type=float, default=0.99, help="EMA decay for teacher")
+parser.add_argument("--lambda_u", type=float, default=1.0,
+                    help="max weight for unlabeled loss (after warmup)")
+parser.add_argument("--ema_alpha", type=float, default=0.99,
+                    help="EMA decay for teacher after warmup")
+# NEW: warmup for unsupervised loss
+parser.add_argument("--warmup_epochs", type=int, default=5,
+                    help="number of epochs to ramp up lambda_u")
+# NEW: confidence threshold for teacher predictions
+parser.add_argument("--conf_thresh", type=float, default=0.6,
+                    help="teacher confidence threshold for unsupervised loss")
+
 
 parser.add_argument("--pretrained_path", type=str, default=None,
                     help="Optional supervised checkpoint to initialize both student & teacher")
@@ -123,8 +167,8 @@ weak_transform_unlabeled = A.Compose([
 strong_transform_unlabeled = A.Compose([
     A.HorizontalFlip(p=0.5),
     A.VerticalFlip(p=0.5),
-    A.Rotate(limit=10, border_mode=0, p=0.5),
-    A.RandomResizedCrop((768, 768), scale=(0.85, 1.0), p=1.0),
+    # A.Rotate(limit=10, border_mode=0, p=0.5),
+    # A.RandomResizedCrop((768, 768), scale=(0.85, 1.0), p=1.0),
     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
 ])
 
@@ -183,6 +227,8 @@ if args.pretrained_path is not None and os.path.isfile(args.pretrained_path):
     print(f"Loading pretrained weights from {args.pretrained_path}")
     state = torch.load(args.pretrained_path, map_location=device)
     student.load_state_dict(state, strict=False)
+    msg = student.load_state_dict(state, strict=False)
+    print(">>> WEIGHT LOADING:", msg)
     teacher.load_state_dict(state, strict=False)
 else:
     # if no checkpoint, just copy random init from student to teacher once
@@ -201,11 +247,40 @@ dice_loss = DiceLoss()
 def supervised_loss(logits, target):
     return bce_loss(logits, target) + dice_loss(logits, target)
 
-def unsupervised_loss(student_logits, teacher_logits):
-    # MSE between probabilities (you can also try KL/BCE)
+# def unsupervised_loss(student_logits, teacher_logits):
+#     # MSE between probabilities (you can also try KL/BCE)
+#     s_prob = torch.sigmoid(student_logits)
+#     t_prob = torch.sigmoid(teacher_logits).detach()
+#     return F.mse_loss(s_prob, t_prob)
+
+# def unsupervised_loss(student_logits, teacher_logits, conf_thresh=0.6):
+#     """
+#     Mean-squared error on high-confidence teacher pixels only.
+#     conf_thresh keeps pixels where t_prob > conf_thresh OR t_prob < 1-conf_thresh.
+#     """
+
+#     s_prob = torch.sigmoid(student_logits)
+#     t_prob = torch.sigmoid(teacher_logits).detach()
+
+#     # mask confident teacher predictions
+#     high_conf = (t_prob > conf_thresh) | (t_prob < (1.0 - conf_thresh))
+#     mask = high_conf.float()
+
+#     mse = (s_prob - t_prob) ** 2
+#     masked_mse = (mask * mse).sum() / (mask.sum() + 1e-6)
+
+#     return masked_mse
+
+def unsupervised_loss(student_logits, teacher_logits, conf_thresh=0.6):
+    """
+    Plain MSE between student and teacher probabilities.
+    (conf_thresh is unused for now — we keep it in the signature for compatibility.)
+    """
     s_prob = torch.sigmoid(student_logits)
     t_prob = torch.sigmoid(teacher_logits).detach()
-    return F.mse_loss(s_prob, t_prob)
+    mse = (s_prob - t_prob) ** 2
+    return mse.mean()
+
 
 # ----------------- training loop -----------------
 best_dice = 0.0
@@ -224,6 +299,20 @@ for epoch in range(args.epochs):
     running_sup = 0.0
     running_unsup = 0.0
 
+    # ----- compute lambda weight (unsupervised loss) with warmup -----
+    if args.warmup_epochs > 0 and epoch < args.warmup_epochs:
+        lambda_weight = args.lambda_u * float(epoch + 1) / float(args.warmup_epochs)
+    else:
+        lambda_weight = args.lambda_u
+
+    # ----- EMA schedule for teacher -----
+    if epoch < 2:
+        ema_alpha = 0.90
+    elif epoch < 5:
+        ema_alpha = 0.95
+    else:
+        ema_alpha = args.ema_alpha
+
     unlabeled_iter = iter(unlabeled_loader)
 
     for img_l, mask_l in labeled_loader:
@@ -240,14 +329,39 @@ for epoch in range(args.epochs):
         img_u_w = img_u_w.to(device)
         img_u_s = img_u_s.to(device)
 
+        # ----- DEBUG VISUALIZATION OF UNLABELED INPUTS -----
+        if epoch == 0:   # only show once
+
+            # strong augmented image
+            img_s_np = img_u_s[0].detach().cpu().numpy().squeeze()
+            plt.figure(figsize=(6,6))
+            plt.imshow(img_s_np, cmap="gray")
+            plt.title("DEBUG: strong augmented unlabeled image")
+            plt.colorbar()
+            plt.savefig(os.path.join(save_dir, "debug_strong_aug.png"))
+            plt.close()
+
+            # weak augmented image
+            img_w_np = img_u_w[0].detach().cpu().numpy().squeeze()
+            plt.figure(figsize=(6,6))
+            plt.imshow(img_w_np, cmap="gray")
+            plt.title("DEBUG: weak augmented unlabeled image")
+            plt.colorbar()
+            plt.savefig(os.path.join(save_dir, "debug_weak_aug.png"))
+            plt.close()
+
+            print("Saved debug_strong_aug.png and debug_weak_aug.png")
+
         # ----- supervised part -----
         optimizer.zero_grad()
 
-        out_l = student(img_l)
-        if isinstance(out_l, (tuple, list)):
-            logits_l = out_l[0]
-        else:
-            logits_l = out_l
+        # out_l = student(img_l)
+        # if isinstance(out_l, (tuple, list)):
+        #     logits_l = out_l[0]
+        # else:
+        #     logits_l = out_l
+
+        logits_l, _ = student(img_l)                         #changed too
 
         # ensure shapes match (like in your supervised script)
         if logits_l.dim() == 4 and mask_l.dim() == 4:
@@ -264,17 +378,27 @@ for epoch in range(args.epochs):
 
         # ----- unlabeled consistency part -----
         with torch.no_grad():
-            out_t = teacher(img_u_w)
-            if isinstance(out_t, (tuple, list)):
-                logits_t = out_t[0]
-            else:
-                logits_t = out_t
+            # out_t = teacher(img_u_w)
+            # if isinstance(out_t, (tuple, list)):
+            #     logits_t = out_t[0]
+            # else:
+            #     logits_t = out_t
+            # 
+            #Teacher always returns (final_pred, deep_preds)
+            logits_t, _ = teacher(img_u_w)
 
-        out_s = student(img_u_s)
-        if isinstance(out_s, (tuple, list)):
-            logits_s = out_s[0]
-        else:
-            logits_s = out_s
+
+        # out_s = student(img_u_s)
+        # if isinstance(out_s, (tuple, list)):
+        #     logits_s = out_s[0]
+        # else:
+        #     logits_s = out_s
+
+        noise = 0.2 * torch.randn_like(img_u_s)          #added noise to student input
+        noisy_img = img_u_s + noise
+
+        logits_s, _ = student(noisy_img)
+
 
         # safe crop
         if logits_s.dim() == 4 and logits_t.dim() == 4:
@@ -286,15 +410,21 @@ for epoch in range(args.epochs):
             if (h != Ht) or (w != Wt):
                 logits_t = logits_t[:, :, :h, :w]
 
-        unsup_loss = unsupervised_loss(logits_s, logits_t)
+        # unsup_loss = unsupervised_loss(logits_s, logits_t)
+        # running_unsup += unsup_loss.item()
+
+        # loss = sup_loss + args.lambda_u * unsup_loss
+
+        unsup_loss = unsupervised_loss(logits_s, logits_t, conf_thresh=args.conf_thresh)
         running_unsup += unsup_loss.item()
 
-        loss = sup_loss + args.lambda_u * unsup_loss
+        loss = sup_loss + lambda_weight * unsup_loss
+
         loss.backward()
         optimizer.step()
 
-        # EMA update of teacher after each step
-        update_teacher(student, teacher, args.ema_alpha)
+        # EMA update of teacher after each step (scheduled alpha)
+        update_teacher(student, teacher, ema_alpha)
 
     # ------------- validation on labeled val set (student) -------------
     student.eval()
@@ -306,11 +436,14 @@ for epoch in range(args.epochs):
             img_v = img_v.to(device)
             mask_v = mask_v.to(device).float()
 
-            out_v = student(img_v)
-            if isinstance(out_v, (tuple, list)):
-                logits_v = out_v[0]
-            else:
-                logits_v = out_v
+            # out_v = student(img_v)
+            # if isinstance(out_v, (tuple, list)):
+            #     logits_v = out_v[0]
+            # else:
+            #     logits_v = out_v
+
+            logits_v, _ = student(img_v)         #changed too
+
 
             if logits_v.dim() == 4 and mask_v.dim() == 4:
                 Hp, Wp = logits_v.shape[2], logits_v.shape[3]
@@ -335,11 +468,19 @@ for epoch in range(args.epochs):
     history_val_loss.append(avg_val_loss)
     history_val_dice.append(avg_val_dice)
 
+    # print(f"Epoch {epoch+1}/{args.epochs} "
+    #       f"| Sup: {avg_sup:.4f} "
+    #       f"| Unsup: {avg_unsup:.4f} "
+    #       f"| ValLoss: {avg_val_loss:.4f} "
+    #       f"| ValDice: {avg_val_dice:.4f}")
+    
     print(f"Epoch {epoch+1}/{args.epochs} "
-          f"| Sup: {avg_sup:.4f} "
-          f"| Unsup: {avg_unsup:.4f} "
-          f"| ValLoss: {avg_val_loss:.4f} "
-          f"| ValDice: {avg_val_dice:.4f}")
+      f"| Sup: {avg_sup:.4f} "
+      f"| Unsup: {avg_unsup:.6f} "
+      f"| λ_u: {lambda_weight:.3f} "
+      f"| EMA: {ema_alpha:.3f} "
+      f"| ValLoss: {avg_val_loss:.4f} "
+      f"| ValDice: {avg_val_dice:.4f}")
 
     # early stopping based on val Dice
     if avg_val_dice > best_dice:
@@ -366,7 +507,8 @@ for epoch in range(args.epochs):
 
         # === VISUALIZE STUDENT VS TEACHER ON UNLABELED ===
         weak_only_loader = UnlabeledWeakOnly(unlabeled_loader)
-        wrapper = SimpleModelWrapper(student, teacher)
+        # wrapper = SimpleModelWrapper(student, teacher)
+        wrapper = BinaryVisWrapper(student, teacher)
 
         visualize_student_vs_teacher(
             model=wrapper,
@@ -394,16 +536,6 @@ plot_losses_curves(
     save_dir=save_dir
 )
 
-weak_only_loader = UnlabeledWeakOnly(unlabeled_loader)
-wrapper = SimpleModelWrapper(student, teacher)
-
-visualize_student_vs_teacher(
-    model=wrapper,
-    unlabeled_loader=weak_only_loader,
-    device=device,
-    save_dir=save_dir
-)
-
 plt.figure()
 plt.plot(history_train_sup, label="train_sup")
 plt.plot(history_train_unsup, label="train_unsup")
@@ -412,7 +544,7 @@ plt.legend()
 plt.xlabel("Epoch")
 plt.ylabel("Loss")
 plt.grid(True)
-plt.savefig(os.path.join(args.save_dir, "semi_training_curves.png"))
+plt.savefig(os.path.join(save_dir, "semi_training_curves.png"))
 plt.close()
 
 plt.figure()
@@ -421,7 +553,10 @@ plt.legend()
 plt.xlabel("Epoch")
 plt.ylabel("Dice")
 plt.grid(True)
-plt.savefig(os.path.join(args.save_dir, "semi_dice_curve.png"))
+plt.savefig(os.path.join(save_dir, "semi_dice_curve.png"))
 plt.close()
 
 print("Semi-supervised training finished. Best Val Dice:", best_dice)
+
+# run this to load pretrained weights:
+# python src/scripts/train/train_semi_supervised_vit_v3.py --pretrained_path "./models/predicted_models/unet_vit_trained.pth" --epochs 4
