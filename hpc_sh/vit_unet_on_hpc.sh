@@ -42,7 +42,7 @@ set -e
 IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
 MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
 SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
-LOG_DIR = "/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs"
+LOG_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs"
 
 EPOCHS=100
 LR=1e-4
@@ -59,6 +59,7 @@ echo "SAVE_DIR: $SAVE_DIR"
 echo "EPOCHS: $EPOCHS"
 echo "LR: $LR"
 echo "BATCH_SIZE: $BATCH_SIZE"
+echo "LOG_DIR: $LOG_DIR"
 
 # ------------------------------
 # Activate Python virtual environment
@@ -78,7 +79,7 @@ mkdir -p "$SAVE_DIR"
 echo "Save directory created/checked: $SAVE_DIR"
 
 mkdir -p "$LOG_DIR"
-echo "Save directory created/checked: $LOG_DIR"
+echo "Log directory created/checked: $LOG_DIR"
 
 
 # ------------------------------
@@ -94,7 +95,8 @@ EOF
 # Run training
 # ------------------------------
 echo "Executing Python training script..."
-python3 src/scripts/train/train_unet_vit.py \
+# python3 src/scripts/train/train_unet_vit.py \
+python3 src/scripts/train/train_unet.py \
     --img_data_path "$IMG_DATA_PATH" \
     --mask_data_path "$MASK_DATA_PATH" \
     --epochs "$EPOCHS" \
