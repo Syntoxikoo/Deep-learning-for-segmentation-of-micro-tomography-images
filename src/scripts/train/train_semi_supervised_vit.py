@@ -76,7 +76,7 @@ def parse_args():
         default="checkpoints",
     )
     # Training hyperparameters
-    parser.add_argument("--epochs", type=int, default=4)
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--input_size", type=int, default=512)
@@ -145,6 +145,12 @@ def main():
     resize = (args.input_size, args.input_size)
 
     transform = v2.Compose(list(TRANSFORM.values()))
+    
+    weak_transform = v2.Compose([
+        v2.RandomVerticalFlip(p=0.5),
+        v2.RandomHorizontalFlip(p=0.5),    # can be used for unlabelled only, in case we don't want same aug on labelled and unlabelled
+    ])
+    
     # Labeled dataset (with masks)
     train_ds = TOMODataset(
         img_dir=args.img_dir,
@@ -172,6 +178,7 @@ def main():
     #     unlabeled_crop,               # remove circular border
     #     *list(TRANSFORM.values()),    # same augmentations as labeled dataset
     # ])
+
     unlabeled_transform = transform
 
     # #  Preview of CENTER CROP (before augmentation)
@@ -276,8 +283,43 @@ def main():
     wce_loss_fn = WeightCELoss()
     dice_loss_fn = DiceLoss()
     cons_loss_fn = ConsistencyLoss(temperature=0.5, conf_thresh=args.conf_thresh)
-    dice_metric = DiceMetric()
 
+    # class DiceMetricInv:
+    #     def __call__(self, p, t, eps=1e-6):
+    #         """
+    #         p : logits from network, shape [B,2,H,W]
+    #         t : ground truth mask, shape [B,1,H,W], values {0,1}
+    #         Computes Dice but inverted so pore=foreground=1.
+    #         """
+
+    #         # ----- convert logits → predicted labels -----
+    #         if p.dim() == 4 and p.shape[1] == 2:
+    #             # get predicted class (0 or 1)
+    #             p = torch.argmax(p, dim=1, keepdim=True)
+
+    #         # now both p and t have shape [B,1,H,W]
+    #         p = p.float()
+    #         t = t.float()
+
+    #         # ----- invert masks -----
+    #         # original dataset: pore = 0, solid = 1
+    #         # for inverted dice: pore = 1, solid = 0
+    #         p = 1 - p
+    #         t = 1 - t
+
+    #         # ----- flatten -----
+    #         p = p.reshape(-1)
+    #         t = t.reshape(-1)
+
+    #         # ----- dice coefficient -----
+    #         intersection = (p * t).sum()
+    #         union = p.sum() + t.sum()
+
+    #         return float((2 * intersection + eps) / (union + eps))
+
+    # dice_metric = DiceMetricInv()
+    dice_metric = DiceMetric()
+ 
     def combined_sup_loss(pred, target, weights):
         return wce_loss_fn(pred, target, weights) + dice_loss_fn(pred, target)
 
@@ -345,8 +387,8 @@ def main():
                     with torch.no_grad():
                         tea_logits_u, tea_deep_preds = model.teacher(imgs_u)
 
-                    # imgs_u_noisy = add_noise(imgs_u)
-                    imgs_u_noisy = imgs_u
+                    imgs_u_noisy = add_noise(imgs_u)  # use noise on images
+                    # imgs_u_noisy = imgs_u
                     stu_logits_u, stu_deep_preds = model.student(imgs_u_noisy)
                     loss_cons = cons_loss_fn(stu_logits_u, tea_logits_u)
 
@@ -499,6 +541,25 @@ def main():
     plot_losses_curves(history["sup_loss"], history["val_loss"], save_dir)
 
     logger.info(f"Training completed. Best Dice: {best_dice:.4f}")
+
+    def plot_consistency_curve(cons_losses, save_dir):
+        """
+        Plot the epoch-wise consistency loss curve.
+        """
+        epochs = list(range(1, len(cons_losses) + 1))
+        plt.figure(figsize=(6, 4))
+        plt.plot(epochs, cons_losses, marker="o", label="Consistency Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Consistency Loss")
+        plt.title("Consistency Loss over Training")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, "consistency_loss_curve.png"))
+        plt.close()
+
+    plot_consistency_curve(history["cons_loss"], save_dir)
+    print("Saved consistency loss curve at:", save_dir)
 
 
 if __name__ == "__main__":

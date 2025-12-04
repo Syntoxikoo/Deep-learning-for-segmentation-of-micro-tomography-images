@@ -140,7 +140,7 @@ class TOMODataset(Dataset):
         # ---- CENTER CROP FOR UNLABELED DATA ----
         if self.label_dir is None:   # unlabeled dataset
             # Crop on the ORIGINAL SIZE (1270x1350) AFTER normalization
-            image = v2.functional.center_crop(image, (650, 650))
+            image = v2.functional.center_crop(image, (650, 650))               #650 FOR NOT TAKING CIRCLE AND BEYOND
 
         # ---- NOW resize (for both labeled and unlabeled) ----
         if self.resized_shape:
@@ -273,7 +273,7 @@ TRANSFORM: dict = {
     "V-flip": v2.RandomVerticalFlip(p=0.5),
     "H-flip": v2.RandomHorizontalFlip(p=0.5),
     "Affine": v2.RandomAffine(
-        degrees=[0, 0],             #removed because fucks up the unlabelled cropping
+        degrees=[0, 0],             #removed rotation here too
         translate=(0.02, 0.02),
         scale=(0.95, 1.05),
         interpolation=v2.InterpolationMode.BILINEAR,       
