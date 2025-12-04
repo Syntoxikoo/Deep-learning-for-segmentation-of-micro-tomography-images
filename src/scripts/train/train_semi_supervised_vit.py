@@ -78,7 +78,7 @@ def parse_args():
     # Training hyperparameters
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--input_size", type=int, default=512)
 
     # Semi-supervised hyperparameters
@@ -117,6 +117,20 @@ def parse_args():
     )
 
     return parser.parse_args()
+
+
+# def consistency_loss_with_confidence(stu_logits, tea_logits, thresh=0.6):          #NOT USED FOR FINAL RUN
+#     s_prob = torch.sigmoid(stu_logits)
+#     t_prob = torch.sigmoid(tea_logits).detach()
+
+#     # teacher confidence mask
+#     mask = (t_prob > thresh) | (t_prob < (1 - thresh))
+#     mask = mask.float()
+
+#     # masked MSE
+#     mse = (s_prob - t_prob)**2
+#     loss = (mse * mask).sum() / (mask.sum() + 1e-6)
+#     return loss
 
 
 def main():
@@ -170,7 +184,7 @@ def main():
 
     # Unlabeled dataset
 
-    # Unlabeled preprocessing: center crop
+    # Unlabeled preprocessing: center crop                                                         #NOT USED FOR FINAL RUN
     # unlabeled_crop = v2.CenterCrop((512, 512))
     # unlabeled_crop = v2.CenterCrop((750, 750))
 
@@ -181,7 +195,7 @@ def main():
 
     unlabeled_transform = transform
 
-    # #  Preview of CENTER CROP (before augmentation)
+    # #  Preview of CENTER CROP (before augmentation)                                                  #NOT USED FOR FINAL RUN
     # # load a raw unlabeled image (first one in the folder)
     # valid_ext = (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp")
     # image_files = [f for f in os.listdir(args.unlabeled_dir) if f.lower().endswith(valid_ext)]
@@ -284,7 +298,7 @@ def main():
     dice_loss_fn = DiceLoss()
     cons_loss_fn = ConsistencyLoss(temperature=0.5, conf_thresh=args.conf_thresh)
 
-    # class DiceMetricInv:
+    # class DiceMetricInv:                                               #NOT USED FOR FINAL RUN
     #     def __call__(self, p, t, eps=1e-6):
     #         """
     #         p : logits from network, shape [B,2,H,W]
@@ -390,10 +404,19 @@ def main():
                     imgs_u_noisy = add_noise(imgs_u)  # use noise on images
                     # imgs_u_noisy = imgs_u
                     stu_logits_u, stu_deep_preds = model.student(imgs_u_noisy)
+                    
                     loss_cons = cons_loss_fn(stu_logits_u, tea_logits_u)
-
                     for stu_dp, tea_dp in zip(stu_deep_preds, tea_deep_preds):
                         loss_cons += 0.5 * cons_loss_fn(stu_dp, tea_dp)
+
+                    # loss_cons = consistency_loss_with_confidence(                             #NOT USED FOR FINAL RUN
+                    #     stu_logits_u, tea_logits_u, thresh=args.conf_thresh
+                    # )
+                    # # Deep supervision with confidence masking
+                    # for stu_dp, tea_dp in zip(stu_deep_preds, tea_deep_preds):
+                    #     loss_cons += 0.5 * consistency_loss_with_confidence(
+                    #         stu_dp, tea_dp, thresh=args.conf_thresh
+                    #     )
 
                     loss = loss_sup + lambda_w * loss_cons
                 scaler.scale(loss).backward()
@@ -421,6 +444,10 @@ def main():
 
                 stu_logits_u, _ = model.student(imgs_u)
                 loss_cons = cons_loss_fn(stu_logits_u, tea_logits_u)
+                # stu_logits_u, _ = model.student(imgs_u)
+                # loss_cons = consistency_loss_with_confidence(                                      #NOT USED FOR FINAL RUN
+                #     stu_logits_u, tea_logits_u, thresh=args.conf_thresh
+                # )
 
                 loss = loss_sup + lambda_w * loss_cons
                 loss.backward()
