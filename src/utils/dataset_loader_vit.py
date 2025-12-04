@@ -215,3 +215,114 @@ class TOMODatasetViT(Dataset):
         cleaned = binary_opening(binary, footprint=disk(1))
 
         return torch.tensor(cleaned, dtype=torch.float32).unsqueeze(0)
+
+class UnlabeledTOMODatasetViT(Dataset):
+    """
+    Unlabeled dataset for semi-supervised training.
+
+    - Loads 3D or 2D .tif volumes from img_dir
+    - Picks a random 2D slice if 3D
+    - Percentile-normalizes (1-99%)
+    - Center-crops to (crop_h, crop_w) BEFORE any augmentation
+    - Returns two augmented views: weak (for teacher) and strong (for student)
+    """
+
+    def __init__(
+        self,
+        img_dir,
+        crop_size=(768, 768),
+        weak_transform=None,
+        strong_transform=None,
+        split="train",
+        train_ratio=0.8,
+        seed=42,
+    ):
+        super().__init__()
+        self.img_dir = img_dir
+        self.crop_h, self.crop_w = crop_size
+        self.weak_transform = weak_transform
+        self.strong_transform = strong_transform
+
+        self.imgs_names = sorted([
+            f for f in os.listdir(img_dir)
+            if f.lower().endswith((".tif", ".tiff"))
+        ])
+        assert len(self.imgs_names) > 0, f"No .tif files found in {img_dir}"
+
+        total_samples = len(self.imgs_names)
+        train_size = int(train_ratio * total_samples)
+
+        np.random.seed(seed)
+        indices = np.random.permutation(total_samples)
+
+        if split == "train":
+            self.indices = indices[:train_size]
+        elif split in ["val", "test"]:
+            self.indices = indices[train_size:]
+        elif split is None:
+            self.indices = indices
+        else:
+            raise ValueError(f"Unknown split '{split}'")
+
+    def __len__(self):
+        return len(self.indices)
+
+    # ---------- small utilities ----------
+    def _load_image(self, idx):
+        img_path = os.path.join(self.img_dir, self.imgs_names[idx])
+        image = tifffile.imread(img_path)  # can be 2D or 3D
+        return image
+
+    def _normalize(self, arr):
+        p1, p99 = np.percentile(arr, (1, 99))
+        arr = np.clip(arr, p1, p99)
+        return ((arr - p1) / (p99 - p1 + 1e-8)).astype(np.float32)
+
+    def _center_crop(self, arr):
+        h, w = arr.shape
+        ch, cw = self.crop_h, self.crop_w
+        if h < ch or w < cw:
+            raise ValueError(f"Array too small ({h},{w}) for crop ({ch},{cw})")
+
+        top = (h - ch) // 2
+        left = (w - cw) // 2
+        return arr[top:top + ch, left:left + cw]
+
+    def __getitem__(self, idx):
+        sample_idx = self.indices[idx]
+        image = self._load_image(sample_idx)
+
+        # If 3D, randomly choose one slice
+        if image.ndim == 3:
+            slice_idx = random.randint(0, image.shape[0] - 1)
+            image = image[slice_idx]
+
+        assert image.ndim == 2, f"Expected 2D image after slicing, got {image.shape}"
+
+        # Normalize and center-crop BEFORE any augmentation
+        image = self._normalize(image)
+        image = self._center_crop(image)  # → (768, 768)
+
+        # Albumentations expects (H, W, C)
+        base_np = image[:, :, None]  # (H, W, 1)
+
+        # ---------- weak view (teacher) ----------
+        if self.weak_transform is not None:
+            aug_w = self.weak_transform(image=base_np)
+            img_w_np = aug_w["image"]
+        else:
+            img_w_np = base_np
+
+        # ---------- strong view (student) ----------
+        if self.strong_transform is not None:
+            aug_s = self.strong_transform(image=base_np)
+            img_s_np = aug_s["image"]
+        else:
+            # if no strong transform, reuse weak one
+            img_s_np = img_w_np
+
+        # convert both to torch (C, H, W)
+        img_w = torch.from_numpy(img_w_np).permute(2, 0, 1).float()
+        img_s = torch.from_numpy(img_s_np).permute(2, 0, 1).float()
+
+        return img_w, img_s

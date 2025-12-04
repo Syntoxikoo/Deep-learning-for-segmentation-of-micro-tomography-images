@@ -9,21 +9,30 @@ import tifffile as tiff
 import torchvision.transforms as T
 from torch.utils.data import Dataset, DataLoader, random_split
 from PIL import Image
-from utils.dataset_loader_vit import TOMODatasetViT
+from pathlib import Path
 
+# Add src folder to path
+REPO_ROOT = Path(__file__).resolve().parents[3]  # Project root
+print("REPO ROOT:", REPO_ROOT)
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models")))
-from Unet_ViT import U_net_ViT
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models")))
+
+from src.utils.dataset_loader_vit import TOMODatasetViT
+from src.models.Unet_ViT_adapted_to_supervised_train import U_net_ViT
+
 
 parser = argparse.ArgumentParser(description="Train a U-Net ViT model for segmentation.")
-parser.add_argument("--img_data_path", type=str, default="../../../datas/original/train/imgs")
-parser.add_argument("--mask_data_path", type=str, default="../../../datas/original/train/labels")
-parser.add_argument("--epochs", type=int, default=40)
+parser.add_argument("--img_data_path", type=str, default="../../../datas/Original Images")
+parser.add_argument("--mask_data_path", type=str, default="../../../datas/Original Masks")
+parser.add_argument("--epochs", type=int, default=4)
 parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--batch_size", type=int, default=1)
-parser.add_argument("--save_dir", type=str, default="../..models/predicted_models")
+parser.add_argument("--save_dir", type=str, default="../../models/predicted_models")
 args = parser.parse_args()
-
+os.makedirs(args.save_dir, exist_ok=True)
 class MicroCTDataset(Dataset):
     def __init__(self, img_dir, mask_dir, transform=None):
         self.img_dir = img_dir
@@ -90,16 +99,16 @@ train_transform = A.Compose([
 
 # Load dataset using your custom loader
 train_ds = TOMODatasetViT(
-    img_dir="datas/original/train/imgs",
-    label_dir="datas/original/train/labels",
+    img_dir="datas/Original Images",
+    label_dir="datas/Original Masks",
     split="train",
     resized_shape=[768, 768],            # Matches model input
     transform=train_transform
 )
 
 val_ds = TOMODatasetViT(
-    img_dir="datas/original/train/imgs",
-    label_dir="datas/original/train/labels",
+    img_dir="datas/Original Images",
+    label_dir="datas/Original Masks",
     split="test",
     resized_shape=[768, 768],
     transform=None
@@ -307,7 +316,6 @@ plt.title(f"pred dice {dice_val:.4f}")
 plt.axis('off')
 
 plt.tight_layout()
-os.makedirs(args.save_dir, exist_ok=True)
 plt.savefig(os.path.join(args.save_dir, "val_example.png"))
 plt.show()
 plt.close()
