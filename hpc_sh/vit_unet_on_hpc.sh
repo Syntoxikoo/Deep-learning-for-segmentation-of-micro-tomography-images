@@ -94,9 +94,8 @@ EOF
 # ------------------------------
 # Run training
 # ------------------------------
-echo "Executing Python training script..."
-# python3 src/scripts/train/train_unet_vit.py \
-python3 src/scripts/train/train_unet.py \
+echo "Executing U-Net ViT training script..."
+python3 src/scripts/train/train_unet_vit.py \
     --img_data_path "$IMG_DATA_PATH" \
     --mask_data_path "$MASK_DATA_PATH" \
     --epochs "$EPOCHS" \

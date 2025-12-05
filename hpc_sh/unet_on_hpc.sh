@@ -42,6 +42,7 @@ set -e
 IMG_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Images"
 MASK_DATA_PATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/datas/Original Masks"
 SAVE_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/models/predicted_models"
+LOG_DIR="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/logs"
 
 EPOCHS=100
 LR=1e-4
@@ -49,6 +50,7 @@ BATCH_SIZE=1  # can reduce to 2 or 1 if OOM persists
 
 # Set PyTorch environment variable to reduce fragmentation
 export PYTORCH_CUDA_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_mb:128"
+export PYTHONPATH="/zhome/0c/9/212141/DL/Deep-learning-for-segmentation-of-micro-tomography-images/src:$PYTHONPATH"
 
 echo "Starting training script..."
 echo "IMG_DATA_PATH: $IMG_DATA_PATH"
@@ -57,6 +59,7 @@ echo "SAVE_DIR: $SAVE_DIR"
 echo "EPOCHS: $EPOCHS"
 echo "LR: $LR"
 echo "BATCH_SIZE: $BATCH_SIZE"
+echo "LOG_DIR: $LOG_DIR"
 
 # ------------------------------
 # Activate Python virtual environment
@@ -75,6 +78,10 @@ fi
 mkdir -p "$SAVE_DIR"
 echo "Save directory created/checked: $SAVE_DIR"
 
+mkdir -p "$LOG_DIR"
+echo "Log directory created/checked: $LOG_DIR"
+
+
 # ------------------------------
 # Clean any leftover GPU memory from previous jobs
 # ------------------------------
@@ -87,8 +94,8 @@ EOF
 # ------------------------------
 # Run training
 # ------------------------------
-echo "Executing Python training script..."
-python3 train/train_old.py \
+echo "Executing U-Net training script..."
+python3 src/scripts/train/train_unet.py \
     --img_data_path "$IMG_DATA_PATH" \
     --mask_data_path "$MASK_DATA_PATH" \
     --epochs "$EPOCHS" \
@@ -97,3 +104,4 @@ python3 train/train_old.py \
     --save_dir "$SAVE_DIR"
 
 echo "Training script finished successfully."
+

@@ -223,7 +223,7 @@ for epoch in range(args.epochs):
         best_dice = avg_dice
         wait = 0
         # save best model (optional)
-        torch.save(model.state_dict(), os.path.join(args.save_dir, "best_unet_vit.pth"))
+        torch.save(model.state_dict(), os.path.join(args.save_dir, "unet_vit_trained.pth"))
     else:
         wait += 1
 

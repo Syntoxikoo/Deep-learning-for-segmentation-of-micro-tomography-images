@@ -51,3 +51,9 @@ A reference method:  define a baseline method and test in a public dataset to be
    ```zsh
    uv sync
    ```
+
+### Main Results
+For the main U-Net and U-Net ViT results, follow the notebook
+```zsh
+   src/main_results.ipynb
+```
