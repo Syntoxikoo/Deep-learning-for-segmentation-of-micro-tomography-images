@@ -52,8 +52,20 @@ A reference method:  define a baseline method and test in a public dataset to be
    uv sync
    ```
 
-### Main Results
+### Main Results U-Net and U-Net ViT
 For the main U-Net and U-Net ViT results, follow the notebook
 ```zsh
    src/main_results.ipynb
+```
+
+### Main Results Semi-Supervised
+1. Navigate to the last_attempt_semisupervised branch:
+
+```zsh
+   git checkout last_attempt_semisupervised
+```
+2. Run
+
+``zsh
+   python scr/scripts/train/train_semi_supervised_vit.py
 ```
