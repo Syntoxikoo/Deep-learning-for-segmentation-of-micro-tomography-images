@@ -64,8 +64,8 @@ For the main U-Net and U-Net ViT results, follow the notebook
 ```zsh
    git checkout last_attempt_semisupervised
 ```
-2. Run
+2. Run with **python 3.11.9**
 
-``zsh
-   python scr/scripts/train/train_semi_supervised_vit.py
+```zsh
+   python src/scripts/train/train_semi_supervised_vit.py
 ```
